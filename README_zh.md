@@ -80,12 +80,13 @@ Google Colab 執行個體位於內部 NAT 網路後方，未配置獨立公網 I
    * **Tags**（選用）: 若組織 Tailnet ACL 規範需要標籤，可指定標籤（如 `tag:server`）。
 4. 點擊 **Generate key** 並複製產生的金鑰字串（格式為 `tskey-auth-...`）。請妥善保存，Tailscale 僅會顯示此金鑰一次。
 
-#### 2. 於 Google Colab Secrets 儲存金鑰
+#### 2. 於 Google Colab Secrets 儲存金鑰與環境變數
 1. 在 Google Colab 左側工具列點擊 **Secrets** 面板（鑰匙圖示）。
 2. 點擊 **Add new secret**（新增密鑰）。
 3. 填入設定數值：
    * **名稱 (Name)**：`TAILSCALE_AUTHKEY`（大小寫需完全一致）。
    * **值 (Value)**：貼上剛才複製的 `tskey-auth-...` 金鑰字串。
+   * *(選用)* 若欲下載受權限保護之 Hugging Face 模型，可新增 `HF_TOKEN` 並填入存取權杖。
 4. 將 **Notebook access**（筆記本存取權限）開關切換為 **開啟 (ON)**，以允許 Python 透過 `google.colab.userdata` 讀取金鑰。
 
 ---
@@ -97,17 +98,21 @@ Google Colab 執行個體位於內部 NAT 網路後方，未配置獨立公網 I
 # ==============================================================================
 # 獨立 SSH 啟動儲存格（基於 Tailscale SSH，免密碼、免管理金鑰）
 # ==============================================================================
-from google.colab import drive, userdata
+import os
+from google.colab import userdata
 
-# 1. 掛載 Google Drive
-drive.mount('/content/drive')
+# 1. 自 Colab Secrets 讀取並注入環境變數
+os.environ['TAILSCALE_AUTHKEY'] = userdata.get('TAILSCALE_AUTHKEY')
+try:
+    os.environ['HF_TOKEN'] = userdata.get('HF_TOKEN')
+except Exception:
+    pass
 
-# 2. 取得剛剛存好的 Tailscale Auth Key
-authkey = userdata.get('TAILSCALE_AUTHKEY')
+# 2. 自 GitHub 複製專案儲存庫（若已存在則自動拉取最新程式碼）
+!git clone https://github.com/yixuanw99/colab-llm-station.git /content/colab-llm-station 2>/dev/null || (cd /content/colab-llm-station && git pull)
 
-# 3. 啟動 Tailscale 並啟用內建 SSH 伺服器（秒級純連線，不佔用時間進行套件安裝）
-!cd /content/drive/MyDrive/colab/colab-llm-station && \
- bash llm.sh tunnel tailscale up "$authkey"
+# 3. 啟動 Tailscale 並啟用原生 SSH 伺服器（秒級純連線，不佔用時間進行套件安裝）
+!cd /content/colab-llm-station && bash llm.sh tunnel tailscale up "$TAILSCALE_AUTHKEY"
 
 print("\n" + "="*60)
 print("[OK] Tailscale SSH 連線已就緒。")
@@ -115,6 +120,7 @@ print("1. 本機終端機連線指令：")
 print("   ssh root@colab-llm-station")
 print("\n2. 本機 VS Code (Remote - SSH) 連線：")
 print("   按 F1 -> 輸入 Remote-SSH: Connect to Host... -> 輸入 root@colab-llm-station")
+print("   （連線後開啟資料夾：/content/colab-llm-station）")
 print("="*60)
 ```
 
@@ -132,7 +138,7 @@ ssh root@colab-llm-station
 1. 在本機 VS Code 安裝官方擴充套件 **「Remote - SSH」** (`ms-vscode-remote.remote-ssh`)。
 2. 按 `F1` 鍵，輸入並選擇 `Remote-SSH: Connect to Host...`。
 3. 輸入 `root@colab-llm-station`。
-4. 連入後點擊「開啟資料夾」，選取 `/content/drive/MyDrive/colab/colab-llm-station` 即可開始開發！
+4. 連入後點擊「開啟資料夾」，選取 `/content/colab-llm-station` 即可開始開發！
 *(亦相容於 Cursor、Zed、PyCharm Gateway 等工具)*。
 
 ---
@@ -141,7 +147,7 @@ ssh root@colab-llm-station
 SSH 連線就緒後，你可以在本機終端機（SSH 或 VS Code 內建終端機）直接執行環境初始化與推論啟動，亦可在 Colab 筆記本的後續儲存格執行：
 
 ```bash
-cd /content/drive/MyDrive/colab/colab-llm-station
+cd /content/colab-llm-station
 
 # 1. 初始化環境依賴（每個新 Runtime 僅需執行一次）
 bash setup.sh

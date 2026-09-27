@@ -226,7 +226,7 @@ for m, v in d['engines']['ollama']['models'].items():
                 ACTION="${3:-status}"
                 case "$ACTION" in
                     up)
-                        AUTHKEY="$4"
+                        AUTHKEY="${4:-$TAILSCALE_AUTHKEY}"
                         mkdir -p "$DIR/.tailscale"
                         if ! command -v tailscale > /dev/null 2>&1 || ! command -v tailscaled > /dev/null 2>&1; then
                             echo "[INFO] Tailscale not detected. Installing Tailscale..."

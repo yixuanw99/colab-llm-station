@@ -86,6 +86,7 @@ Google Colab runtimes reside behind internal network address translation (NAT) w
 3. Enter the required fields:
    * **Name**: `TAILSCALE_AUTHKEY` (case-sensitive).
    * **Value**: Paste your `tskey-auth-...` key string.
+   * *(Optional)* Add `HF_TOKEN` with your Hugging Face Access Token if downloading gated models.
 4. Toggle the **Notebook access** switch to **ON** to permit runtime access via `google.colab.userdata`.
 
 ---
@@ -97,17 +98,21 @@ Run the following cell in your Colab notebook (or run Step 1 in [`colab_station.
 # ==============================================================================
 # Standalone SSH Startup Cell (Tailscale SSH: Zero-config, Passwordless)
 # ==============================================================================
-from google.colab import drive, userdata
+import os
+from google.colab import userdata
 
-# 1. Mount Google Drive
-drive.mount('/content/drive')
+# 1. Retrieve Secrets & Set Environment Variables
+os.environ['TAILSCALE_AUTHKEY'] = userdata.get('TAILSCALE_AUTHKEY')
+try:
+    os.environ['HF_TOKEN'] = userdata.get('HF_TOKEN')
+except Exception:
+    pass
 
-# 2. Retrieve Tailscale Auth Key from Secrets
-authkey = userdata.get('TAILSCALE_AUTHKEY')
+# 2. Clone Repository to Local Instance Storage
+!git clone https://github.com/yixuanw99/colab-llm-station.git /content/colab-llm-station 2>/dev/null || (cd /content/colab-llm-station && git pull)
 
 # 3. Connect to Tailscale with Native SSH Server (Instant connection, zero setup overhead)
-!cd /content/drive/MyDrive/colab/colab-llm-station && \
- bash llm.sh tunnel tailscale up "$authkey"
+!cd /content/colab-llm-station && bash llm.sh tunnel tailscale up "$TAILSCALE_AUTHKEY"
 
 print("\n" + "="*60)
 print("[OK] Tailscale SSH service is ready.")
@@ -115,6 +120,7 @@ print("1. Local Terminal Connection:")
 print("   ssh root@colab-llm-station")
 print("\n2. Local VS Code (Remote - SSH) Connection:")
 print("   Press F1 -> Select Remote-SSH: Connect to Host... -> root@colab-llm-station")
+print("   (Open Folder: /content/colab-llm-station)")
 print("="*60)
 ```
 
@@ -132,7 +138,7 @@ ssh root@colab-llm-station
 1. In your local VS Code, install the official extension **"Remote - SSH"** (`ms-vscode-remote.remote-ssh`).
 2. Press `F1`, search and choose `Remote-SSH: Connect to Host...`.
 3. Enter `root@colab-llm-station`.
-4. Once connected, click "Open Folder" and select `/content/drive/MyDrive/colab/colab-llm-station`!
+4. Once connected, click "Open Folder" and select `/content/colab-llm-station`!
 *(Also works identically with Cursor, Zed, and PyCharm Gateway)*.
 
 ---
@@ -141,7 +147,7 @@ ssh root@colab-llm-station
 Now that your SSH connection is active, provision the environment and launch inference either directly from your local SSH / VS Code terminal or in the subsequent Colab notebook cells:
 
 ```bash
-cd /content/drive/MyDrive/colab/colab-llm-station
+cd /content/colab-llm-station
 
 # 1. Provision environment dependencies (Run once per runtime session)
 bash setup.sh
