@@ -107,17 +107,16 @@ for m, v in d['engines']['ollama']['models'].items():
         SUBCMD="${2:-help}"
         case "$SUBCMD" in
             serve)
-                MODEL="${3:-Qwen/Qwen2.5-Coder-32B-Instruct}"
+                MODEL="${3:-Qwen/Qwen2.5-Coder-32B-Instruct-AWQ}"
                 echo "[INFO] Starting vLLM server (Model: $MODEL, Port: 8000)..."
-                nohup python3 -m vllm.entrypoints.openai.api_server \
-                    --model "$MODEL" \
+                nohup vllm serve "$MODEL" \
                     --port 8000 \
                     --trust-remote-code \
-                    --max-model-len 32768 \
+                    --max-model-len 16384 \
                     --gpu-memory-utilization 0.90 > "$DIR/vllm.log" 2>&1 &
                 echo "[INFO] Daemon started. Logs: $DIR/vllm.log"
                 echo "[INFO] Waiting for endpoint readiness..."
-                for i in {1..30}; do
+                for i in {1..60}; do
                     if curl -s http://127.0.0.1:8000/v1/models &> /dev/null; then
                         echo "[SUCCESS] vLLM endpoint ready at http://127.0.0.1:8000/v1"
                         exit 0
@@ -128,7 +127,8 @@ for m, v in d['engines']['ollama']['models'].items():
                 ;;
             stop)
                 echo "[INFO] Terminating vLLM process..."
-                pkill -f "vllm.entrypoints.openai.api_server" || true
+                pkill -f "vllm serve" || true
+                pkill -f "VLLM::EngineCore" || true
                 echo "[SUCCESS] Process terminated."
                 ;;
             bench)
