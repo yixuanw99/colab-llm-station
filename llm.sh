@@ -281,12 +281,13 @@ for m, v in d['engines']['ollama']['models'].items():
                                 --outbound-http-proxy-listen=localhost:1055 > "$LOG_DIR/tailscaled.log" 2>&1 &
                             sleep 2
                         fi
+                        TS_HOSTNAME="${TAILSCALE_HOSTNAME:-colab-llm-station}"
                         if [ -n "$AUTHKEY" ]; then
-                            echo "[INFO] Authenticating Tailscale with provided authkey (SSH enabled)..."
-                            tailscale up --authkey="$AUTHKEY" --hostname="colab-llm-station" --ssh --accept-risk=all
+                            echo "[INFO] Authenticating Tailscale with provided authkey (SSH enabled, hostname: $TS_HOSTNAME)..."
+                            tailscale up --authkey="$AUTHKEY" --hostname="$TS_HOSTNAME" --ssh --accept-risk=all
                         else
-                            echo "[INFO] Complete authentication via URL/QR (SSH enabled):"
-                            tailscale up --hostname="colab-llm-station" --qr --ssh --accept-risk=all
+                            echo "[INFO] Complete authentication via URL/QR (SSH enabled, hostname: $TS_HOSTNAME):"
+                            tailscale up --hostname="$TS_HOSTNAME" --qr --ssh --accept-risk=all
                         fi
                         ;;
                     status)

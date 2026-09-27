@@ -124,6 +124,25 @@ def get_catalog_recommendation(gpu: str, engine: str) -> str:
         return "Qwen/Qwen2.5-Coder-32B-Instruct-AWQ"
 
 
+def resolve_inference_host(port: int, default_host: str = "colab-llm-station") -> tuple[str, list[str]]:
+    """Probe candidate hostnames to locate active inference engine across Tailscale suffix disambiguations."""
+    candidates = [default_host]
+    for suffix in ["-1", "-2", "-3"]:
+        cand = f"{default_host}{suffix}"
+        if cand not in candidates:
+            candidates.append(cand)
+    for host in candidates:
+        try:
+            req = urllib.request.Request(f"http://{host}:{port}/v1/models", headers={"User-Agent": "StationCtl"})
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                models = [m.get("id", "") for m in data.get("data", [])]
+                return host, models
+        except Exception:
+            continue
+    return "", []
+
+
 def cmd_up(args: argparse.Namespace):
     """Provision remote Colab GPU session and bootstrap station services."""
     check_colab_cli()
@@ -212,32 +231,31 @@ def cmd_up(args: argparse.Namespace):
 
     # 4. Local Tailscale Reachability Verification
     port = 8000 if engine == "vllm" else 11434
-    endpoint = f"http://colab-llm-station:{port}/v1/models"
+    target_host = getattr(args, "host", None) or os.environ.get("TAILSCALE_HOST", "colab-llm-station")
     log("Verifying Tailscale peer reachability from local workstation...")
-    log(f"Target Endpoint: {endpoint}")
+    log(f"Target Service Port: {port}")
 
     ready = False
+    active_host = target_host
     for i in range(30):
-        try:
-            req = urllib.request.Request(endpoint, headers={"User-Agent": "StationCtl"})
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                if resp.status == 200:
-                    ready = True
-                    break
-        except Exception:
-            time.sleep(2)
+        h, _ = resolve_inference_host(port, default_host=target_host)
+        if h:
+            ready = True
+            active_host = h
+            break
+        time.sleep(2)
 
     if ready:
         log("=" * 70)
         log("[SUCCESS] Colab LLM Station is LIVE and accessible over your Tailnet!")
-        log(f"Inference Base URL: http://colab-llm-station:{port}/v1")
+        log(f"Inference Base URL: http://{active_host}:{port}/v1")
         log(f"Active Engine:      {engine.upper()}")
         log(f"Active Model:       {model}")
         log("=" * 70)
         print("\nReady for OpenCode! Run `./station.sh test` to verify generation throughput.")
     else:
         log("[WARN] Model daemon started, but endpoint not yet reachable via local Tailscale DNS.")
-        log("If local DNS resolution is pending, run 'tailscale ping colab-llm-station'.")
+        log(f"If local DNS resolution is pending, run 'tailscale ping {target_host}'.")
 
 
 def cmd_down(args: argparse.Namespace):
@@ -288,21 +306,23 @@ def cmd_status(args: argparse.Namespace):
     run_colab_cmd(["sessions"], timeout=30, stream_output=True)
 
     log("\n=== Inference Endpoint Probing ===")
+    default_host = getattr(args, "host", None) or os.environ.get("TAILSCALE_HOST", "colab-llm-station")
     for port, label in [(8000, "vLLM"), (11434, "Ollama")]:
-        try:
-            req = urllib.request.Request(f"http://colab-llm-station:{port}/v1/models", headers={"User-Agent": "StationCtl"})
-            with urllib.request.urlopen(req, timeout=2) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                models = [m.get("id", "") for m in data.get("data", [])]
-                log(f"[ACTIVE]  {label} Service (Port {port}): Models = {models}")
-        except Exception:
-            log(f"[OFFLINE] {label} Service (Port {port})")
+        host, models = resolve_inference_host(port, default_host=default_host)
+        if host:
+            log(f"[ACTIVE]  {label} Service ({host}:{port}): Models = {models}")
+        else:
+            log(f"[OFFLINE] {label} Service ({default_host}:{port})")
 
 
 def cmd_test(args: argparse.Namespace):
     """Send test completion request from local workstation to remote Colab."""
     port = args.port
-    endpoint = f"http://colab-llm-station:{port}/v1/chat/completions"
+    default_host = getattr(args, "host", None) or os.environ.get("TAILSCALE_HOST", "colab-llm-station")
+    host, _ = resolve_inference_host(port, default_host=default_host)
+    if not host:
+        host = default_host
+    endpoint = f"http://{host}:{port}/v1/chat/completions"
     log(f"Sending test completion request to {endpoint}...")
 
     payload = {
@@ -360,6 +380,7 @@ def main():
     p_up.add_argument("--engine", choices=["vllm", "ollama"], help="Inference engine (auto-detected by GPU)")
     p_up.add_argument("--model", help="Model identifier")
     p_up.add_argument("--session", help="Colab session name (default: colab-llm-station)")
+    p_up.add_argument("--host", help="Tailscale host name (default: colab-llm-station)")
     p_up.add_argument("--authkey", help="Tailscale auth key")
     p_up.add_argument("--hf-token", help="Hugging Face access token")
     p_up.add_argument("--high-mem", action="store_true", help="Request high-memory instance")
@@ -371,11 +392,13 @@ def main():
     p_down.add_argument("--session", help="Colab session name (default: colab-llm-station)")
 
     # STATUS
-    subparsers.add_parser("status", help="Inspect Colab usage, sessions, and endpoint health")
+    p_status = subparsers.add_parser("status", help="Inspect Colab usage, sessions, and endpoint health")
+    p_status.add_argument("--host", help="Tailscale target host (default: auto-detect)")
 
     # TEST
     p_test = subparsers.add_parser("test", help="Test remote inference endpoint from local workstation")
     p_test.add_argument("--port", type=int, default=8000, help="Port to query (8000 for vLLM, 11434 for Ollama)")
+    p_test.add_argument("--host", help="Tailscale target host (default: auto-detect)")
     p_test.add_argument("--model", default="", help="Model name")
 
     # SSH
