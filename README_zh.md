@@ -132,6 +132,60 @@ bash setup.sh
 
 ---
 
+## 客戶端整合：OpenCode (v2)
+
+Colab LLM Station 支援透過私人 Tailnet 內網無縫串接 [OpenCode](https://opencode.ai) 開發環境，採用官方最新之 OpenCode v2 提供者規格。
+
+### 1. 配置設定檔 (`opencode.json` / `opencode.jsonc`)
+
+將以下設定放置於專案根目錄，或放在 `%USERPROFILE%\.config\opencode\opencode.json` (Windows) / `~/.config/opencode/opencode.json` (Linux/macOS)：
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "providers": {
+    "colab-station": {
+      "package": "@opencode/ai/providers/openai-compatible",
+      "name": "Colab LLM Station",
+      "settings": {
+        "baseURL": "http://colab-llm-station:11434/v1",
+        "apiKey": "ollama"
+      },
+      "models": {
+        "qwen3.8:27b": {
+          "name": "Qwen 3.8 (27B)",
+          "limit": { "context": 262144, "output": 16384 }
+        },
+        "deepseek-r1:32b": {
+          "name": "DeepSeek R1 (32B)",
+          "limit": { "context": 131072, "output": 16384 }
+        },
+        "qwen2.5-coder:32b": {
+          "name": "Qwen 2.5 Coder (32B)",
+          "limit": { "context": 32768, "output": 16384 }
+        }
+      }
+    }
+  }
+}
+```
+
+> 提示：若使用 vLLM 引擎，請將 `baseURL` 端口改為 `8000`，並填入對應的 Hugging Face 模型名稱。
+
+### 2. Windows PowerShell 快速一鍵設定
+
+在客戶端筆電的 PowerShell 執行以下指令自動生成設定檔：
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.config\opencode" | Out-Null
+Copy-Item "templates\opencode.json" -Destination "$HOME\.config\opencode\opencode.json"
+```
+
+### 3. 生效與使用
+重啟 OpenCode 服務（`opencode service restart` 或重啟桌面客戶端），於 OpenCode 終端輸入 `/models` 即可直接選擇模型展開推論。
+
+---
+
 ## 版本控制與遠端同步
 
 ```bash
@@ -139,3 +193,4 @@ bash setup.sh
 ./llm.sh sync
 ```
 *(已配置 `.gitignore`，自動過濾大型模型權重、日誌檔與敏感憑證)。*
+

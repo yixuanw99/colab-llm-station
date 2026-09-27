@@ -1,0 +1,36 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "providers": {
+    "colab-station": {
+      "package": "@opencode/ai/providers/openai-compatible",
+      "name": "Colab LLM Station",
+      "settings": {
+        "baseURL": "http://colab-llm-station:11434/v1",
+        "apiKey": "ollama"
+      },
+      "models": {
+        "qwen3.8:27b": {
+          "name": "Qwen 3.8 (27B)",
+          "limit": {
+            "context": 262144,
+            "output": 16384
+          }
+        },
+        "deepseek-r1:32b": {
+          "name": "DeepSeek R1 (32B)",
+          "limit": {
+            "context": 131072,
+            "output": 16384
+          }
+        },
+        "qwen2.5-coder:32b": {
+          "name": "Qwen 2.5 Coder (32B)",
+          "limit": {
+            "context": 32768,
+            "output": 16384
+          }
+        }
+      }
+    }
+  }
+}
