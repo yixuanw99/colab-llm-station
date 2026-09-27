@@ -14,4 +14,10 @@ blobs/
 *.bin
 *.safetensors
 *.gguf
+# Environment & Local Secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
 .tailscale/

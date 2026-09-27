@@ -65,22 +65,27 @@ All runtime components are locked to verified versions via `configs/versions.env
 
 ```
 colab-llm-station/
-├── llm.sh                  # Master CLI lifecycle controller (vLLM, Ollama, Tailscale, Cloudflare)
+├── station.sh              # Local workstation launcher (macOS, Linux, WSL)
+├── station.ps1             # Local workstation launcher (Windows PowerShell)
+├── llm.sh                  # Colab master CLI lifecycle controller (vLLM, Ollama, Tunnels)
 ├── setup.sh                # Root forwarder -> scripts/setup.sh
 ├── sync_git.sh             # Root forwarder -> scripts/sync_git.sh
-├── colab_station.ipynb     # Primary interactive deployment notebook (English source of truth)
-├── colab_station-zh.ipynb  # Mirrored interactive deployment notebook (Traditional Chinese)
+├── colab_station.ipynb     # Interactive deployment notebook (English source of truth)
+├── colab_station-zh.ipynb  # Mirrored deployment notebook (Traditional Chinese)
 ├── AGENTS.md               # AI agent operating standards & execution guardrails
+├── .env.example            # Template for local workstation environment variables
 ├── configs/                # Central configurations, models catalog, and version locks
 │   ├── models.json         # Model catalog and hardware recommendations
 │   ├── versions.env        # Pinned binary and system versions
 │   └── requirements.lock   # Pinned Python package dependencies
-├── scripts/                # Shell automation & lifecycle scripts
+├── scripts/                # Shell & bootstrap automation scripts
 │   ├── setup.sh            # Environment bootstrap & dependency installer
-│   └── sync_git.sh         # Non-interactive Git commit & push synchronization tool
-├── tools/                  # Python diagnostic, benchmarking, and interactive CLI utilities
-│   ├── benchmark.py        # Latency, TTFT, and generation throughput benchmarking utility
-│   ├── chat.py             # Interactive terminal chat client for local testing
+│   ├── sync_git.sh         # Non-interactive Git commit & push tool
+│   └── remote_bootstrap.py # Remote headless bootstrap payload for `colab exec`
+├── tools/                  # Diagnostic, benchmarking, and workstation orchestrator
+│   ├── station_ctl.py      # Core local workstation orchestrator (Google Colab CLI)
+│   ├── benchmark.py        # Latency, TTFT, and generation throughput benchmark
+│   ├── chat.py             # Interactive terminal chat client for testing
 │   ├── test_inference.py   # Automated engine diagnostic script
 │   └── api_client_example.py # OpenAI-compatible client API usage sample
 ├── templates/
@@ -90,7 +95,65 @@ colab-llm-station/
 
 ---
 
-## Quickstart (Colab Notebook Execution Flow)
+## Deployment Workflows
+
+Colab LLM Station supports two execution workflows:
+1. **Workflow 1: Local Headless CLI (Zero-Browser, Recommended)**: Launch, manage, and unassign Colab GPU runtimes entirely from your local workstation terminal via `google-colab-cli`.
+2. **Workflow 2: Interactive Web Notebook (Standard)**: Open and run through `colab_station.ipynb` in the Google Colab web browser interface.
+
+---
+
+## Workflow 1: Local Headless CLI (Zero-Browser Setup)
+
+This mode eliminates the need to open a web browser. Your local computer provisions the Colab VM, bootstraps the server, connects to Tailscale, and monitors health in a single command.
+
+### 1. Prerequisites (Local Machine)
+- Install Google Colab CLI:
+  ```bash
+  uv tool install google-colab-cli
+  # OR: pip install google-colab-cli
+  ```
+- Authenticate with Google OAuth (one-time):
+  ```bash
+  colab --auth=oauth2 usage
+  ```
+
+### 2. Configure Local Secrets
+Copy the environment template and insert your Tailscale Auth Key:
+```bash
+cp .env.example .env
+# Edit .env and set TAILSCALE_AUTHKEY=tskey-auth-...
+```
+
+### 3. Launch Colab LLM Station
+Run the local launcher to provision an enterprise A100 GPU and launch vLLM:
+```bash
+# macOS / Linux / WSL
+./station.sh up --gpu A100
+
+# Windows PowerShell
+.\station.ps1 up --gpu A100
+```
+*The launcher automatically allocates the Colab VM, installs dependencies, mounts Tailscale, starts vLLM, and verifies endpoint readiness.*
+
+### 4. Daily Operations
+```bash
+# Inspect status, quota, and inference endpoint
+./station.sh status
+
+# Test inference round-trip latency from your local terminal
+./station.sh test
+
+# Open interactive SSH shell into Colab runtime via Tailscale
+./station.sh ssh
+
+# Terminate runtime and stop Compute Unit billing immediately
+./station.sh down
+```
+
+---
+
+## Workflow 2: Interactive Web Notebook (Colab UI)
 
 This repository provides ready-to-run Jupyter notebooks: **[`colab_station.ipynb`](colab_station.ipynb)** (English) and **[`colab_station-zh.ipynb`](colab_station-zh.ipynb)** (繁體中文). You can open and run them directly in Google Colab.
 

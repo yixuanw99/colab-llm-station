@@ -65,20 +65,25 @@ Colab LLM Station 旨在解決雲端暫態 GPU 環境中的兩大工程挑戰：
 
 ```
 colab-llm-station/
-├── llm.sh                  # 主控 CLI 生命週期管理器 (vLLM, Ollama, Tailscale, Cloudflare)
+├── station.sh              # 本機工作站啟動器 (macOS, Linux, WSL)
+├── station.ps1             # 本機工作站啟動器 (Windows PowerShell)
+├── llm.sh                  # Colab 主控 CLI 生命週期管理器 (vLLM, Ollama, Tunnels)
 ├── setup.sh                # 根目錄轉發入口 -> scripts/setup.sh
 ├── sync_git.sh             # 根目錄轉發入口 -> scripts/sync_git.sh
 ├── colab_station.ipynb     # 核心互動部署筆記本 (英文基準)
 ├── colab_station-zh.ipynb  # 鏡像互動部署筆記本 (繁體中文)
 ├── AGENTS.md               # AI 代理人維護標準與執行規範
+├── .env.example            # 本地工作站環境變數配置範本
 ├── configs/                # 集中配置、模型型錄與版本鎖定目錄
 │   ├── models.json         # 模型型錄與 GPU 顯存配置建議
 │   ├── versions.env        # 鎖定之二進制與系統工具版本
 │   └── requirements.lock   # 鎖定之 Python 套件依賴
-├── scripts/                # Shell 自動化與安裝腳本
+├── scripts/                # Shell 自動化與雲端初始化腳本
 │   ├── setup.sh            # 環境初始化與依賴安裝腳本
-│   └── sync_git.sh         # 非互動式 Git 自動保存與同步腳本
-├── tools/                  # Python 診斷、效能基準與互動客戶端工具
+│   ├── sync_git.sh         # 非互動式 Git 自動保存與同步腳本
+│   └── remote_bootstrap.py # 供 `colab exec` 執行的遠端無頭初始化酬載
+├── tools/                  # Python 診斷、效能基準與本機調度工具
+│   ├── station_ctl.py      # 本機工作站核心調度器 (Google Colab CLI 整合)
 │   ├── benchmark.py        # 延遲 (TTFT) 與吞吐量基準評測腳本
 │   ├── chat.py             # 終端互動式對話測試工具
 │   ├── test_inference.py   # 自動化推論驗證腳本
@@ -90,7 +95,65 @@ colab-llm-station/
 
 ---
 
-## 快速啟動 (Colab 筆記本執行流程)
+## 部署工作流程方案 (Deployment Workflows)
+
+Colab LLM Station 支援兩種部署操作模式：
+1. **方案一：本機無頭 CLI 模式（零瀏覽器，強烈推薦）**：透過官方 `google-colab-cli` 在本機終端機一鍵開機、配置、診斷與銷毀 Colab GPU 實例，完全無需開啟網頁瀏覽器。
+2. **方案二：互動式 Web 筆記本模式（標準）**：在 Google Colab 網頁介面開啟並依序執行 `colab_station-zh.ipynb`。
+
+---
+
+## 方案一：本機無頭 CLI 模式 (Zero-Browser Setup)
+
+此模式完全擺脫手動開啟網頁的繁瑣流程。本機電腦會自動向 Google 發起 GPU 資源配置請求，完成套件安裝、掛載 Tailscale 內網並監控健康狀態。
+
+### 1. 本機前置準備 (Prerequisites)
+- 安裝 Google Colab CLI：
+  ```bash
+  uv tool install google-colab-cli
+  # 或使用 pip: pip install google-colab-cli
+  ```
+- 完成 Google OAuth2 授權（僅需一次）：
+  ```bash
+  colab --auth=oauth2 usage
+  ```
+
+### 2. 設定本機密鑰環境變數
+複製範本並填入您的 Tailscale Auth Key：
+```bash
+cp .env.example .env
+# 編輯 .env 並填入 TAILSCALE_AUTHKEY=tskey-auth-...
+```
+
+### 3. 一鍵啟動 Colab 推論站
+在本機終端機執行啟動命令（預設調度企業級 A100 GPU 並啟動 vLLM）：
+```bash
+# macOS / Linux / WSL
+./station.sh up --gpu A100
+
+# Windows PowerShell
+.\station.ps1 up --gpu A100
+```
+*啟動器會自動建立 Colab VM、非互動式安裝相依套件、連上 Tailscale Mesh、啟動 vLLM，並驗證端點連通性。*
+
+### 4. 日常營運與管理指令
+```bash
+# 檢視目前 Colab 配額餘額、運行中的 Session 與推論端點狀態
+./station.sh status
+
+# 從本機發送測試請求，檢驗端點首字延遲與回答品質
+./station.sh test
+
+# 透過 Tailscale SSH 直接免密登入 Colab 雲端終端
+./station.sh ssh
+
+# 使用完畢後一鍵釋放 VM，立即停止 Colab 運算單元（CU）扣點
+./station.sh down
+```
+
+---
+
+## 方案二：互動式 Web 筆記本模式 (Colab UI)
 
 本專案提供立即可用的 Jupyter 範例筆記本：**[`colab_station.ipynb`](colab_station.ipynb)**（英文版）與 **[`colab_station-zh.ipynb`](colab_station-zh.ipynb)**（繁體中文版），你可以直接在 Google Colab 中開啟並執行。
 

@@ -27,20 +27,25 @@ All AI agents interacting with this repository or acting within this project mus
 
 ```
 colab-llm-station/
-├── llm.sh                  # Master CLI lifecycle controller (vLLM, Ollama, Tailscale, Cloudflare)
+├── station.sh              # Local workstation launcher (macOS, Linux, WSL)
+├── station.ps1             # Local workstation launcher (Windows PowerShell)
+├── llm.sh                  # Colab master CLI lifecycle controller (vLLM, Ollama, Tailscale, Cloudflare)
 ├── setup.sh                # Root forwarder -> scripts/setup.sh
 ├── sync_git.sh             # Root forwarder -> scripts/sync_git.sh
 ├── colab_station.ipynb     # Primary interactive deployment notebook (English source of truth)
 ├── colab_station-zh.ipynb  # Mirrored interactive deployment notebook (Traditional Chinese)
 ├── AGENTS.md               # AI agent operating instructions and repository guardrails
+├── .env.example            # Template for local workstation environment variables
 ├── configs/                # Central configurations, models catalog, and version locks
 │   ├── models.json         # Model catalog metadata and hardware allocation recommendations
 │   ├── versions.env        # Pinned binary and system versions
 │   └── requirements.lock   # Pinned Python package dependencies
-├── scripts/                # Shell automation & lifecycle scripts
+├── scripts/                # Shell & bootstrap automation scripts
 │   ├── setup.sh            # Environment bootstrap & dependency installer
-│   └── sync_git.sh         # Non-interactive Git commit & push synchronization tool
-├── tools/                  # Python diagnostic, benchmarking, and interactive CLI utilities
+│   ├── sync_git.sh         # Non-interactive Git commit & push synchronization tool
+│   └── remote_bootstrap.py # Remote headless bootstrap payload for `colab exec`
+├── tools/                  # Python diagnostic, benchmarking, and local orchestrator utilities
+│   ├── station_ctl.py      # Core local workstation orchestrator (Google Colab CLI)
 │   ├── benchmark.py        # Latency, TTFT, and generation throughput benchmarking utility
 │   ├── chat.py             # Interactive terminal chat client for local testing
 │   ├── test_inference.py   # Automated engine diagnostic script
