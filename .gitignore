@@ -11,3 +11,4 @@ blobs/
 *.bin
 *.safetensors
 *.gguf
+.tailscale/
