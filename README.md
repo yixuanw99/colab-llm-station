@@ -91,12 +91,14 @@ Google Colab runtimes reside behind internal network address translation (NAT) w
 
 ---
 
-### Step 1: Run the Standalone SSH Startup Cell in Colab
+### Step 1: [Optional] Standalone SSH Startup Cell in Colab
+> **Note**: This step is strictly **optional**. If you only want to serve LLM inference endpoints via Cloudflare or Tailscale without remote terminal access, you can skip this step and proceed directly to Step 3.
+
 Run the following cell in your Colab notebook (or run Step 1 in [`colab_station.ipynb`](colab_station.ipynb)):
 
 ```python
 # ==============================================================================
-# Standalone SSH Startup Cell (Tailscale SSH: Zero-config, Passwordless)
+# [OPTIONAL] Standalone SSH Startup Cell (Tailscale SSH: Zero-config, Passwordless)
 # ==============================================================================
 import os
 from google.colab import userdata
@@ -126,7 +128,7 @@ print("="*60)
 
 ---
 
-### Step 2: Connect from Local Workstation
+### Step 2: [Optional] Connect from Local Workstation
 
 #### Option A: Direct Terminal Connection (PowerShell / macOS Terminal / Linux)
 ```bash
@@ -143,30 +145,56 @@ ssh root@colab-llm-station
 
 ---
 
-### Step 3: Initialize Environment & Serve Inference
-Now that your SSH connection is active, provision the environment and launch inference either directly from your local SSH / VS Code terminal or in the subsequent Colab notebook cells:
+### Step 3: Choose Deployment Solution & Serve Inference
+Provision the environment and launch your chosen combination (either in your connected SSH terminal or directly inside the Colab notebook):
 
+#### Provision Dependencies (Run once per runtime)
 ```bash
 cd /content/colab-llm-station
 
-# 1. Provision environment dependencies (Run once per runtime session)
-bash setup.sh
+# Option A: Fast Ollama install for T4/L4 (~15 seconds)
+bash setup.sh ollama
 
-# Or provision only a specific engine:
-# bash setup.sh vllm    # Only vLLM and system dependencies
-# bash setup.sh ollama  # Only Ollama
+# Option B: High-throughput vLLM install for A100/H100 (~2-3 minutes)
+# bash setup.sh vllm
 
-# 2. Serve LLM Inference:
-# Enterprise Tier (A100 / H100): Launch vLLM (Port 8000)
-bash llm.sh tunnel tailscale serve 8000
-bash llm.sh vllm serve Qwen/Qwen2.5-Coder-32B-Instruct
-
-# Standard Tier (T4 / L4): Launch Ollama (Port 11434)
-# bash llm.sh tunnel tailscale serve 11434
-# bash llm.sh ollama serve
+# Option C: Full dual-engine installation
+# bash setup.sh
 ```
 
-Once running, client applications (OpenCode, LangChain, Python scripts) can immediately reach the OpenAI endpoint at `http://colab-llm-station:8000/v1` over your private Tailnet!
+#### Choose Your Combination:
+
+* **Solution A: Ollama + Cloudflare Tunnel** *(Standard Tier T4/L4, Zero-config Public HTTPS)*
+  ```bash
+  bash llm.sh ollama pull qwen2.5-coder:7b
+  bash llm.sh ollama serve
+  bash llm.sh tunnel cloudflare 11434
+  # Returns public HTTPS URL: https://<subdomain>.trycloudflare.com/v1
+  ```
+
+* **Solution B: Ollama + Tailscale Mesh** *(Standard Tier T4/L4, Private Encrypted Mesh)*
+  ```bash
+  bash llm.sh tunnel tailscale up "$TAILSCALE_AUTHKEY"
+  bash llm.sh ollama pull qwen2.5-coder:32b
+  bash llm.sh ollama serve
+  bash llm.sh tunnel tailscale serve 11434
+  # Reachable at: http://colab-llm-station:11434/v1
+  ```
+
+* **Solution C: vLLM + Tailscale Mesh** *(Enterprise Tier A100/H100, High Concurrency Private Mesh)*
+  ```bash
+  bash llm.sh tunnel tailscale up "$TAILSCALE_AUTHKEY"
+  bash llm.sh tunnel tailscale serve 8000
+  bash llm.sh vllm serve Qwen/Qwen2.5-Coder-32B-Instruct
+  # Reachable at: http://colab-llm-station:8000/v1
+  ```
+
+* **Solution D: vLLM + Cloudflare Tunnel** *(Enterprise Tier A100/H100, High Performance Public HTTPS)*
+  ```bash
+  bash llm.sh vllm serve Qwen/Qwen2.5-72B-Instruct-AWQ
+  bash llm.sh tunnel cloudflare 8000
+  # Returns public HTTPS URL: https://<subdomain>.trycloudflare.com/v1
+  ```
 
 ---
 

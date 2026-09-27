@@ -91,12 +91,14 @@ Google Colab 執行個體位於內部 NAT 網路後方，未配置獨立公網 I
 
 ---
 
-### 步驟 1：在 Colab 執行「獨立連線儲存格」建立 SSH
+### 步驟 1：[選用] 在 Colab 執行「獨立連線儲存格」建立 SSH
+> **說明**：本步驟為**完全選用**。若你只需要透過 Cloudflare 或 Tailscale 提供 LLM 推論 API 端點供外部調用，而不需要遠端終端機修改檔案，可直接跳過此步驟，進入步驟 3。
+
 在 Colab 執行以下儲存格（或直接開啟 [`colab_station.ipynb`](colab_station.ipynb) / [`colab_station-zh.ipynb`](colab_station-zh.ipynb) 執行步驟 1）：
 
 ```python
 # ==============================================================================
-# 獨立 SSH 啟動儲存格（基於 Tailscale SSH，免密碼、免管理金鑰）
+# [選用] 獨立 SSH 啟動儲存格（基於 Tailscale SSH，免密碼、免管理金鑰）
 # ==============================================================================
 import os
 from google.colab import userdata
@@ -126,7 +128,7 @@ print("="*60)
 
 ---
 
-### 步驟 2：本機電腦連線方式
+### 步驟 2：[選用] 本機電腦連線方式
 
 #### 方式 A：本機終端機直連（PowerShell / macOS Terminal / Linux）
 ```bash
@@ -143,30 +145,56 @@ ssh root@colab-llm-station
 
 ---
 
-### 步驟 3：初始化環境與啟動 LLM 推論服務
-SSH 連線就緒後，你可以在本機終端機（SSH 或 VS Code 內建終端機）直接執行環境初始化與推論啟動，亦可在 Colab 筆記本的後續儲存格執行：
+### 步驟 3：選取部署方案並啟動 LLM 推論服務
+請依據當前硬體等級與使用情境，選取最適合的推論與網路通道方案（可於 SSH 終端機或 Colab 儲存格直接執行）：
 
+#### 安裝環境依賴（每個新 Runtime 僅需執行一次）
 ```bash
 cd /content/colab-llm-station
 
-# 1. 初始化環境依賴（每個新 Runtime 僅需執行一次）
-bash setup.sh
+# 選項 A：標準級 T4/L4 推薦極速安裝 Ollama（約 15 秒）
+bash setup.sh ollama
 
-# 亦可依需求單獨安裝特定推論引擎：
-# bash setup.sh vllm    # 僅安裝 vLLM 與系統依賴
-# bash setup.sh ollama  # 僅安裝 Ollama 與系統依賴
+# 選項 B：企業級 A100/H100 安裝 vLLM（約 2-3 分鐘）
+# bash setup.sh vllm
 
-# 2. 啟動推論引擎：
-# 企業級 GPU (A100 / H100): 啟動 vLLM (Port 8000)
-bash llm.sh tunnel tailscale serve 8000
-bash llm.sh vllm serve Qwen/Qwen2.5-Coder-32B-Instruct
-
-# 標準級 GPU (T4 / L4): 啟動 Ollama (Port 11434)
-# bash llm.sh tunnel tailscale serve 11434
-# bash llm.sh ollama serve
+# 選項 C：雙引擎完整安裝
+# bash setup.sh
 ```
 
-啟動後，本機的 OpenCode、Python 腳本或任何客戶端即可直接透過 `http://colab-llm-station:8000/v1` 調用模型！
+#### 四大部署方案選用：
+
+* **方案 A：Ollama + Cloudflare Tunnel** *(標準級 T4/L4，零配置免帳號公開 HTTPS)*
+  ```bash
+  bash llm.sh ollama pull qwen2.5-coder:7b
+  bash llm.sh ollama serve
+  bash llm.sh tunnel cloudflare 11434
+  # 輸出公網 HTTPS 端點：https://<隨機子域>.trycloudflare.com/v1
+  ```
+
+* **方案 B：Ollama + Tailscale Mesh** *(標準級 T4/L4，私有加密網格，零公網暴露)*
+  ```bash
+  bash llm.sh tunnel tailscale up "$TAILSCALE_AUTHKEY"
+  bash llm.sh ollama pull qwen2.5-coder:32b
+  bash llm.sh ollama serve
+  bash llm.sh tunnel tailscale serve 11434
+  # 私網內部訪問端點：http://colab-llm-station:11434/v1
+  ```
+
+* **方案 C：vLLM + Tailscale Mesh** *(企業級 A100/H100，高併發 PagedAttention 私有網格)*
+  ```bash
+  bash llm.sh tunnel tailscale up "$TAILSCALE_AUTHKEY"
+  bash llm.sh tunnel tailscale serve 8000
+  bash llm.sh vllm serve Qwen/Qwen2.5-Coder-32B-Instruct
+  # 私網內部訪問端點：http://colab-llm-station:8000/v1
+  ```
+
+* **方案 D：vLLM + Cloudflare Tunnel** *(企業級 A100/H100，高效能臨時公開 HTTPS)*
+  ```bash
+  bash llm.sh vllm serve Qwen/Qwen2.5-72B-Instruct-AWQ
+  bash llm.sh tunnel cloudflare 8000
+  # 輸出公網 HTTPS 端點：https://<隨機子域>.trycloudflare.com/v1
+  ```
 
 ---
 
