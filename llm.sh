@@ -113,7 +113,9 @@ for m, v in d['engines']['ollama']['models'].items():
                     --port 8000 \
                     --trust-remote-code \
                     --max-model-len 16384 \
-                    --gpu-memory-utilization 0.90 > "$DIR/vllm.log" 2>&1 &
+                    --gpu-memory-utilization 0.90 \
+                    --enable-auto-tool-choice \
+                    --tool-call-parser hermes > "$DIR/vllm.log" 2>&1 &
                 echo "[INFO] Daemon started. Logs: $DIR/vllm.log"
                 echo "[INFO] Waiting for endpoint readiness..."
                 for i in {1..60}; do
