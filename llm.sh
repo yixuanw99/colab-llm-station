@@ -6,6 +6,12 @@
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_DIR="$DIR/configs"
+SCRIPTS_DIR="$DIR/scripts"
+TOOLS_DIR="$DIR/tools"
+LOG_DIR="$DIR/logs"
+
+mkdir -p "$LOG_DIR"
 cd "$DIR"
 
 function detect_hardware() {
@@ -37,18 +43,23 @@ function show_help() {
     echo "Usage: ./llm.sh [command] [options...]"
     echo ""
     echo "General Commands:"
+    echo "  setup [mode]             Provision environment (ollama, vllm, tunnels, or all)"
     echo "  status                   Display GPU metrics, active engines, and network tunnels"
     echo "  list                     Show catalogue of recommended models for vLLM & Ollama"
+    echo "  test                     Run automated inference latency and output verification"
     echo "  sync                     Stage, commit, and push updates to remote Git repository"
     echo ""
     echo "Engine: vLLM (Port 8000, high-concurrency, Safetensors / AWQ):"
-    echo "  vllm serve [model]       Launch background vLLM OpenAI-compatible server"
+    echo "  vllm start [model]       Launch background vLLM OpenAI-compatible server"
     echo "  vllm stop                Terminate running vLLM server instance"
+    echo "  vllm logs                Tail live vLLM output logs"
     echo "  vllm bench [model]       Execute throughput and latency benchmark"
     echo "  vllm chat [model]        Start interactive CLI session via vLLM endpoint"
     echo ""
     echo "Engine: Ollama (Port 11434, lightweight GGUF format):"
-    echo "  ollama serve             Ensure background Ollama daemon is running"
+    echo "  ollama start             Ensure background Ollama daemon is running"
+    echo "  ollama stop              Terminate running Ollama daemon"
+    echo "  ollama logs              Tail live Ollama output logs"
     echo "  ollama pull <model>      Download GGUF model from registry (e.g. qwen3.8:27b)"
     echo "  ollama chat [model]      Start interactive multi-turn chat session"
     echo "  ollama bench [model]     Run generation performance benchmark"
@@ -66,6 +77,10 @@ function show_help() {
 CMD="${1:-help}"
 
 case "$CMD" in
+    setup)
+        "$SCRIPTS_DIR/setup.sh" "${@:2}"
+        ;;
+
     status)
         detect_hardware
         echo -e "\n=== Engine Status ==="
@@ -82,7 +97,7 @@ case "$CMD" in
         fi
 
         echo -e "\n=== Network Tunnel Status ==="
-        CF_URL=$(grep -o 'https://[-a-zA-Z0-9.]*\.trycloudflare\.com' "$DIR/tunnel.log" 2>/dev/null | tail -n 1 || true)
+        CF_URL=$(grep -o 'https://[-a-zA-Z0-9.]*\.trycloudflare\.com' "$LOG_DIR/tunnel.log" 2>/dev/null | tail -n 1 || true)
         if [ -n "$CF_URL" ] && pgrep -f "cloudflared tunnel" > /dev/null; then
             echo "[ACTIVE]  Cloudflare Public Tunnel: $CF_URL"
         else
@@ -108,7 +123,7 @@ case "$CMD" in
     list)
         python3 -c "
 import json
-with open('models.json') as f:
+with open('$CONFIG_DIR/models.json') as f:
     d = json.load(f)
 print('=== vLLM Models (Production / A100 / H100) ===')
 for m, v in d['engines']['vllm']['models'].items():
@@ -119,10 +134,14 @@ for m, v in d['engines']['ollama']['models'].items():
 "
         ;;
 
+    test)
+        python3 "$TOOLS_DIR/test_inference.py" "${@:2}"
+        ;;
+
     vllm)
         SUBCMD="${2:-help}"
         case "$SUBCMD" in
-            serve)
+            serve|start)
                 MODEL="${3:-Qwen/Qwen2.5-Coder-32B-Instruct-AWQ}"
                 MAX_LEN="${VLLM_MAX_MODEL_LEN:-32768}"
                 echo "[INFO] Starting vLLM server (Model: $MODEL, MaxLen: $MAX_LEN, Port: 8000)..."
@@ -132,8 +151,9 @@ for m, v in d['engines']['ollama']['models'].items():
                     --max-model-len "$MAX_LEN" \
                     --gpu-memory-utilization 0.90 \
                     --enable-auto-tool-choice \
-                    --tool-call-parser hermes > "$DIR/vllm.log" 2>&1 &
-                echo "[INFO] Daemon started. Logs: $DIR/vllm.log"
+                    --tool-call-parser hermes > "$LOG_DIR/vllm.log" 2>&1 &
+                echo "$!" > "$LOG_DIR/vllm.pid" 2>/dev/null || true
+                echo "[INFO] Daemon started. Logs: $LOG_DIR/vllm.log"
                 echo "[INFO] Waiting for endpoint readiness..."
                 # Wait up to 360 seconds (180 iterations * 2s) for model loading & CUDA graph compilation
                 for i in {1..180}; do
@@ -143,7 +163,7 @@ for m, v in d['engines']['ollama']['models'].items():
                     fi
                     if ! pgrep -f "vllm serve" > /dev/null; then
                         echo "[ERROR] vLLM process died unexpectedly during startup. Last log entries:"
-                        tail -n 25 "$DIR/vllm.log"
+                        tail -n 25 "$LOG_DIR/vllm.log"
                         exit 1
                     fi
                     if (( i % 15 == 0 )); then
@@ -151,24 +171,28 @@ for m, v in d['engines']['ollama']['models'].items():
                     fi
                     sleep 2
                 done
-                echo "[WARN] Server is still loading weights after 6 minutes. Monitor progress with 'tail -f $DIR/vllm.log'."
+                echo "[WARN] Server is still loading weights after 6 minutes. Monitor progress with 'tail -f $LOG_DIR/vllm.log'."
                 ;;
             stop)
                 echo "[INFO] Terminating vLLM process..."
                 pkill -f "vllm serve" || true
                 pkill -f "VLLM::EngineCore" || true
+                rm -f "$LOG_DIR/vllm.pid" 2>/dev/null || true
                 echo "[SUCCESS] Process terminated."
+                ;;
+            logs)
+                tail -n 50 -f "$LOG_DIR/vllm.log"
                 ;;
             bench)
                 MODEL="${3:-Qwen/Qwen2.5-Coder-32B-Instruct}"
-                python3 "$DIR/benchmark.py" --engine vllm --port 8000 --model "$MODEL"
+                python3 "$TOOLS_DIR/benchmark.py" --engine vllm --port 8000 --model "$MODEL"
                 ;;
             chat)
                 MODEL="${3:-Qwen/Qwen2.5-Coder-32B-Instruct}"
-                python3 "$DIR/chat.py" --engine vllm --port 8000 --model "$MODEL"
+                python3 "$TOOLS_DIR/chat.py" --engine vllm --port 8000 --model "$MODEL"
                 ;;
             *)
-                echo "Usage: ./llm.sh vllm [serve|stop|bench|chat] [model]"
+                echo "Usage: ./llm.sh vllm [start|stop|logs|bench|chat] [model]"
                 ;;
         esac
         ;;
@@ -176,13 +200,21 @@ for m, v in d['engines']['ollama']['models'].items():
     ollama)
         SUBCMD="${2:-help}"
         case "$SUBCMD" in
-            serve)
+            serve|start)
                 if ! curl -s http://127.0.0.1:11434/api/version &> /dev/null; then
                     echo "[INFO] Starting Ollama daemon..."
-                    OLLAMA_ORIGINS="*" OLLAMA_HOST="0.0.0.0:11434" nohup ollama serve > "$DIR/ollama.log" 2>&1 &
+                    OLLAMA_ORIGINS="*" OLLAMA_HOST="0.0.0.0:11434" nohup ollama serve > "$LOG_DIR/ollama.log" 2>&1 &
                     sleep 3
                 fi
                 echo "[SUCCESS] Ollama running at http://127.0.0.1:11434"
+                ;;
+            stop)
+                echo "[INFO] Terminating Ollama daemon..."
+                pkill -f "ollama serve" || true
+                echo "[SUCCESS] Ollama stopped."
+                ;;
+            logs)
+                tail -n 50 -f "$LOG_DIR/ollama.log"
                 ;;
             pull)
                 MODEL="$3"
@@ -191,17 +223,17 @@ for m, v in d['engines']['ollama']['models'].items():
                 ;;
             bench)
                 MODEL="${3:-qwen3.8:27b}"
-                python3 "$DIR/benchmark.py" --engine ollama --port 11434 --model "$MODEL"
+                python3 "$TOOLS_DIR/benchmark.py" --engine ollama --port 11434 --model "$MODEL"
                 ;;
             chat)
                 MODEL="${3:-qwen3.8:27b}"
-                python3 "$DIR/chat.py" --engine ollama --port 11434 --model "$MODEL"
+                python3 "$TOOLS_DIR/chat.py" --engine ollama --port 11434 --model "$MODEL"
                 ;;
             list)
                 ollama list
                 ;;
             *)
-                echo "Usage: ./llm.sh ollama [serve|pull|bench|chat|list] [model]"
+                echo "Usage: ./llm.sh ollama [start|stop|logs|pull|bench|chat|list] [model]"
                 ;;
         esac
         ;;
@@ -222,9 +254,9 @@ for m, v in d['engines']['ollama']['models'].items():
                 fi
                 echo "[INFO] Establishing Cloudflare Tunnel to 127.0.0.1:$PORT..."
                 pkill -f "cloudflared tunnel" || true
-                nohup cloudflared tunnel --url "http://127.0.0.1:$PORT" --logfile "$DIR/tunnel.log" > /dev/null 2>&1 &
+                nohup cloudflared tunnel --url "http://127.0.0.1:$PORT" --logfile "$LOG_DIR/tunnel.log" > /dev/null 2>&1 &
                 sleep 6
-                CF_URL=$(grep -o 'https://[-a-zA-Z0-9.]*\.trycloudflare\.com' "$DIR/tunnel.log" | tail -n 1 || true)
+                CF_URL=$(grep -o 'https://[-a-zA-Z0-9.]*\.trycloudflare\.com' "$LOG_DIR/tunnel.log" | tail -n 1 || true)
                 echo "================================================================"
                 echo "Cloudflare Public Tunnel Established:"
                 echo "  Base URL: $CF_URL/v1"
@@ -246,7 +278,7 @@ for m, v in d['engines']['ollama']['models'].items():
                             nohup tailscaled --tun=userspace-networking \
                                 --state="$DIR/.tailscale/tailscaled.state" \
                                 --socks5-server=localhost:1055 \
-                                --outbound-http-proxy-listen=localhost:1055 > "$DIR/tailscaled.log" 2>&1 &
+                                --outbound-http-proxy-listen=localhost:1055 > "$LOG_DIR/tailscaled.log" 2>&1 &
                             sleep 2
                         fi
                         if [ -n "$AUTHKEY" ]; then
@@ -318,14 +350,14 @@ for m, v in d['engines']['ollama']['models'].items():
                             echo "[WARN] VS Code Tunnel is already running."
                         else
                             echo "[INFO] Starting VS Code Remote Tunnel (Name: $NAME)..."
-                            nohup code tunnel --accept-server-license-terms --name "$NAME" > "$DIR/vscode_tunnel.log" 2>&1 &
+                            nohup code tunnel --accept-server-license-terms --name "$NAME" > "$LOG_DIR/vscode_tunnel.log" 2>&1 &
                             sleep 4
                         fi
                         echo "================================================================"
                         echo "VS Code Remote Tunnel Status:"
                         echo "  Machine Name: $NAME"
                         echo "  Web URL:      https://vscode.dev/tunnel/$NAME"
-                        echo "  Log File:     $DIR/vscode_tunnel.log"
+                        echo "  Log File:     $LOG_DIR/vscode_tunnel.log"
                         echo "================================================================"
                         ;;
                     status)
@@ -360,7 +392,7 @@ for m, v in d['engines']['ollama']['models'].items():
         ;;
 
     sync)
-        "$DIR/sync_git.sh"
+        "$SCRIPTS_DIR/sync_git.sh"
         ;;
 
     *)
