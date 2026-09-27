@@ -12,7 +12,7 @@
         "Qwen/Qwen2.5-Coder-32B-Instruct-AWQ": {
           "name": "Qwen 2.5 Coder 32B (vLLM AWQ)",
           "limit": {
-            "context": 16384,
+            "context": 32768,
             "output": 8192
           }
         }

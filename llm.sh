@@ -108,11 +108,12 @@ for m, v in d['engines']['ollama']['models'].items():
         case "$SUBCMD" in
             serve)
                 MODEL="${3:-Qwen/Qwen2.5-Coder-32B-Instruct-AWQ}"
-                echo "[INFO] Starting vLLM server (Model: $MODEL, Port: 8000)..."
+                MAX_LEN="${VLLM_MAX_MODEL_LEN:-32768}"
+                echo "[INFO] Starting vLLM server (Model: $MODEL, MaxLen: $MAX_LEN, Port: 8000)..."
                 nohup vllm serve "$MODEL" \
                     --port 8000 \
                     --trust-remote-code \
-                    --max-model-len 16384 \
+                    --max-model-len "$MAX_LEN" \
                     --gpu-memory-utilization 0.90 \
                     --enable-auto-tool-choice \
                     --tool-call-parser hermes > "$DIR/vllm.log" 2>&1 &
