@@ -1,4 +1,6 @@
-# Logs
+# Logs & PIDs
+logs/*
+!logs/.gitkeep
 *.log
 *.pid
 

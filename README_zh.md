@@ -51,13 +51,42 @@ Colab LLM Station 旨在解決雲端暫態 GPU 環境中的兩大工程挑戰：
 
 ## 確定性與版本鎖定
 
-所有執行階段二進制與核心相依性均透過 `versions.env` 與 `requirements.lock` 進行鎖定，杜絕跨機器部署時的版本漂移：
+所有執行階段二進制與核心相依性均透過 `configs/versions.env` 與 `configs/requirements.lock` 進行鎖定，杜絕跨機器部署時的版本漂移：
 
 * **Ollama**: `v0.34.4`
 * **vLLM**: `v0.30.0`
 * **Cloudflared**: `v2026.9.3`
 * **Tailscale**: `v1.102.4`
 * **VS Code CLI**: Stable x64
+
+---
+
+## 儲存庫目錄架構 (Repository Architecture)
+
+```
+colab-llm-station/
+├── llm.sh                  # 主控 CLI 生命週期管理器 (vLLM, Ollama, Tailscale, Cloudflare)
+├── setup.sh                # 根目錄轉發入口 -> scripts/setup.sh
+├── sync_git.sh             # 根目錄轉發入口 -> scripts/sync_git.sh
+├── colab_station.ipynb     # 核心互動部署筆記本 (英文基準)
+├── colab_station-zh.ipynb  # 鏡像互動部署筆記本 (繁體中文)
+├── AGENTS.md               # AI 代理人維護標準與執行規範
+├── configs/                # 集中配置、模型型錄與版本鎖定目錄
+│   ├── models.json         # 模型型錄與 GPU 顯存配置建議
+│   ├── versions.env        # 鎖定之二進制與系統工具版本
+│   └── requirements.lock   # 鎖定之 Python 套件依賴
+├── scripts/                # Shell 自動化與安裝腳本
+│   ├── setup.sh            # 環境初始化與依賴安裝腳本
+│   └── sync_git.sh         # 非互動式 Git 自動保存與同步腳本
+├── tools/                  # Python 診斷、效能基準與互動客戶端工具
+│   ├── benchmark.py        # 延遲 (TTFT) 與吞吐量基準評測腳本
+│   ├── chat.py             # 終端互動式對話測試工具
+│   ├── test_inference.py   # 自動化推論驗證腳本
+│   └── api_client_example.py # OpenAI 相容 API 調用示範
+├── templates/
+│   └── opencode.json       # 本地 OpenCode 客戶端連線配置範本
+└── logs/                   # 背景服務日誌與 PID 存放目錄 (已加入 .gitignore)
+```
 
 ---
 

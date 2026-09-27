@@ -51,13 +51,42 @@ Colab LLM Station is built to address two major operational challenges in cloud 
 
 ## Reproducibility & Version Locking
 
-All runtime components are locked to verified versions via `versions.env` and `requirements.lock` to guarantee deterministic provisioning:
+All runtime components are locked to verified versions via `configs/versions.env` and `configs/requirements.lock` to guarantee deterministic provisioning:
 
 * **Ollama**: `v0.34.4`
 * **vLLM**: `v0.30.0`
 * **Cloudflared**: `v2026.9.3`
 * **Tailscale**: `v1.102.4`
 * **VS Code CLI**: Stable x64
+
+---
+
+## Repository Architecture
+
+```
+colab-llm-station/
+├── llm.sh                  # Master CLI lifecycle controller (vLLM, Ollama, Tailscale, Cloudflare)
+├── setup.sh                # Root forwarder -> scripts/setup.sh
+├── sync_git.sh             # Root forwarder -> scripts/sync_git.sh
+├── colab_station.ipynb     # Primary interactive deployment notebook (English source of truth)
+├── colab_station-zh.ipynb  # Mirrored interactive deployment notebook (Traditional Chinese)
+├── AGENTS.md               # AI agent operating standards & execution guardrails
+├── configs/                # Central configurations, models catalog, and version locks
+│   ├── models.json         # Model catalog and hardware recommendations
+│   ├── versions.env        # Pinned binary and system versions
+│   └── requirements.lock   # Pinned Python package dependencies
+├── scripts/                # Shell automation & lifecycle scripts
+│   ├── setup.sh            # Environment bootstrap & dependency installer
+│   └── sync_git.sh         # Non-interactive Git commit & push synchronization tool
+├── tools/                  # Python diagnostic, benchmarking, and interactive CLI utilities
+│   ├── benchmark.py        # Latency, TTFT, and generation throughput benchmarking utility
+│   ├── chat.py             # Interactive terminal chat client for local testing
+│   ├── test_inference.py   # Automated engine diagnostic script
+│   └── api_client_example.py # OpenAI-compatible client API usage sample
+├── templates/
+│   └── opencode.json       # OpenCode client configuration template for Tailscale mesh
+└── logs/                   # Dedicated directory for runtime logs and PID files (git-ignored)
+```
 
 ---
 

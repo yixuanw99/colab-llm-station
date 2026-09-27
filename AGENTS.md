@@ -28,21 +28,33 @@ All AI agents interacting with this repository or acting within this project mus
 ```
 colab-llm-station/
 ├── llm.sh                  # Master CLI lifecycle controller (vLLM, Ollama, Tailscale, Cloudflare)
-├── setup.sh                # Environment bootstrap & dependency installer
-├── sync_git.sh             # Non-interactive Git commit & push synchronization tool
+├── setup.sh                # Root forwarder -> scripts/setup.sh
+├── sync_git.sh             # Root forwarder -> scripts/sync_git.sh
 ├── colab_station.ipynb     # Primary interactive deployment notebook (English source of truth)
 ├── colab_station-zh.ipynb  # Mirrored interactive deployment notebook (Traditional Chinese)
-├── models.json             # Model catalog metadata and hardware allocation recommendations
-├── benchmark.py            # Latency, TTFT, and generation throughput benchmarking utility
-├── chat.py                 # Interactive terminal chat client for local testing
-├── test_inference.py       # Automated engine diagnostic script
+├── AGENTS.md               # AI agent operating instructions and repository guardrails
+├── configs/                # Central configurations, models catalog, and version locks
+│   ├── models.json         # Model catalog metadata and hardware allocation recommendations
+│   ├── versions.env        # Pinned binary and system versions
+│   └── requirements.lock   # Pinned Python package dependencies
+├── scripts/                # Shell automation & lifecycle scripts
+│   ├── setup.sh            # Environment bootstrap & dependency installer
+│   └── sync_git.sh         # Non-interactive Git commit & push synchronization tool
+├── tools/                  # Python diagnostic, benchmarking, and interactive CLI utilities
+│   ├── benchmark.py        # Latency, TTFT, and generation throughput benchmarking utility
+│   ├── chat.py             # Interactive terminal chat client for local testing
+│   ├── test_inference.py   # Automated engine diagnostic script
+│   └── api_client_example.py # OpenAI-compatible client API usage sample
 ├── templates/
 │   └── opencode.json       # OpenCode client configuration template for Tailscale mesh
-└── AGENTS.md               # AI agent operating instructions and repository guardrails
+└── logs/                   # Dedicated directory for runtime logs and PID files (git-ignored)
 ```
 
 ### Key Responsibilities:
-- **`llm.sh`**: Centralized CLI wrapper. All engine operations (`start`, `stop`, `status`, `logs`) and tunnel management must go through `llm.sh`. Do not spawn raw background daemons directly in notebook cells or scripts when an `llm.sh` command exists.
+- **`llm.sh`**: Centralized CLI wrapper. All engine operations (`start`, `stop`, `status`, `logs`), benchmarking, and tunnel management must go through `llm.sh`. Do not spawn raw background daemons directly in notebook cells or scripts when an `llm.sh` command exists.
+- **`configs/`**: Contains version locking (`versions.env`, `requirements.lock`) and hardware metadata (`models.json`).
+- **`scripts/`**: Contains environment bootstrap (`setup.sh`) and headless git synchronization (`sync_git.sh`).
+- **`tools/`**: Contains client-side diagnostic scripts, benchmarks, and interactive shells.
 - **`colab_station.ipynb` & `colab_station-zh.ipynb`**: User-facing entry points. Must be maintained as exact 1:1 mirrors in structure and logic.
 - **`templates/opencode.json`**: Standardized provider config template mapping local OpenCode instances to Colab Tailscale mesh endpoints.
 
