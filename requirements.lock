@@ -1,0 +1,2 @@
+# Pinned core dependencies for vLLM on Colab Python 3.13
+vllm==0.30.0
