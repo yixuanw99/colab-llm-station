@@ -233,16 +233,23 @@ for m, v in d['engines']['ollama']['models'].items():
                         ;;
                     serve)
                         PORT="${4:-8000}"
-                        echo "[INFO] Exposing local port $PORT to private Tailnet..."
-                        tailscale serve --bg "$PORT"
+                        echo "[INFO] Exposing local port $PORT to private Tailnet via TCP proxy..."
+                        tailscale serve --bg --tcp "$PORT" "$PORT"
+                        tailscale serve status
                         ;;
                     *)
                         echo "Usage: ./llm.sh tunnel tailscale [up|status|down|serve] [authkey/port]"
                         ;;
                 esac
                 ;;
+            stop)
+                echo "[INFO] Terminating all tunnel services..."
+                pkill -f "cloudflared" || true
+                tailscale serve reset || true
+                echo "[SUCCESS] All tunnels stopped."
+                ;;
             *)
-                echo "Usage: ./llm.sh tunnel [cloudflare|tailscale]"
+                echo "Usage: ./llm.sh tunnel [cloudflare|tailscale|stop]"
                 ;;
         esac
         ;;
