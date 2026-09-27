@@ -135,14 +135,23 @@ for m, v in d['engines']['ollama']['models'].items():
                     --tool-call-parser hermes > "$DIR/vllm.log" 2>&1 &
                 echo "[INFO] Daemon started. Logs: $DIR/vllm.log"
                 echo "[INFO] Waiting for endpoint readiness..."
-                for i in {1..60}; do
+                # Wait up to 360 seconds (180 iterations * 2s) for model loading & CUDA graph compilation
+                for i in {1..180}; do
                     if curl -s http://127.0.0.1:8000/v1/models &> /dev/null; then
                         echo "[SUCCESS] vLLM endpoint ready at http://127.0.0.1:8000/v1"
                         exit 0
                     fi
+                    if ! pgrep -f "vllm serve" > /dev/null; then
+                        echo "[ERROR] vLLM process died unexpectedly during startup. Last log entries:"
+                        tail -n 25 "$DIR/vllm.log"
+                        exit 1
+                    fi
+                    if (( i % 15 == 0 )); then
+                        echo "[INFO] Still loading weights and compiling CUDA graphs ($((i * 2))s elapsed)..."
+                    fi
                     sleep 2
                 done
-                echo "[WARN] Server is still loading weights. Monitor progress with 'tail -f $DIR/vllm.log'."
+                echo "[WARN] Server is still loading weights after 6 minutes. Monitor progress with 'tail -f $DIR/vllm.log'."
                 ;;
             stop)
                 echo "[INFO] Terminating vLLM process..."
