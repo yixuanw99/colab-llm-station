@@ -59,6 +59,24 @@ if [[ "$MODE" == "all" ]] || [[ "$MODE" == "tunnels" ]]; then
         echo "[OK] Tailscale version matched: ${CURRENT_TS}"
     fi
     mkdir -p "$DIR/.tailscale"
+
+    # VS Code CLI
+    if ! command -v code > /dev/null 2>&1; then
+        echo "[INFO] Installing VS Code CLI..."
+        curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' --output /tmp/vscode_cli.tar.gz
+        tar -xf /tmp/vscode_cli.tar.gz -C /usr/local/bin
+        chmod +x /usr/local/bin/code
+        rm -f /tmp/vscode_cli.tar.gz
+    else
+        echo "[OK] VS Code CLI version matched: $(code --version 2>/dev/null | head -n 1)"
+    fi
+
+    # Restore VS Code credentials from Google Drive if present
+    PERSIST_VSCODE="/content/drive/MyDrive/.vscode_colab"
+    if [ -d "$PERSIST_VSCODE" ]; then
+        mkdir -p /root/.vscode/cli
+        cp -rn "$PERSIST_VSCODE"/* /root/.vscode/cli/ 2>/dev/null || true
+    fi
 fi
 
 # 3. Ollama Engine

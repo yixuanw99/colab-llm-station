@@ -48,10 +48,12 @@ function show_help() {
     echo "  ollama bench [model]     Run generation performance benchmark"
     echo "  ollama list              List all locally cached Ollama models"
     echo ""
-    echo "Network Tunnels:"
+    echo "Network & Remote IDE Tunnels:"
     echo "  tunnel cloudflare [port] Create public HTTPS endpoint via Cloudflare Tunnel (POC)"
     echo "  tunnel tailscale [cmd]   Manage private mesh network via Tailscale (Production)"
     echo "                           Subcommands: up, status, down, serve [port]"
+    echo "  tunnel vscode [cmd]      Manage VS Code Remote Tunnel (Web & Desktop IDE)"
+    echo "                           Subcommands: setup, login, start [name], status, stop"
     echo "================================================================================"
 }
 
@@ -86,6 +88,14 @@ case "$CMD" in
             tailscale status | head -n 3
         else
             echo "[INACTIVE] Tailscale Mesh Network (Run './llm.sh tunnel tailscale up')"
+        fi
+
+        if pgrep -f "code tunnel" > /dev/null; then
+            VSCODE_NAME=$(grep -o '"name": *"[^"]*"' /root/.vscode/cli/code_tunnel.json 2>/dev/null | cut -d'"' -f4 || echo "my-colab-gpu")
+            echo "[ACTIVE]  VS Code Remote Tunnel (Name: $VSCODE_NAME)"
+            echo "          Endpoint: https://vscode.dev/tunnel/$VSCODE_NAME"
+        else
+            echo "[INACTIVE] VS Code Remote Tunnel (Run './llm.sh tunnel vscode start')"
         fi
         ;;
 
@@ -221,11 +231,11 @@ for m, v in d['engines']['ollama']['models'].items():
                             sleep 2
                         fi
                         if [ -n "$AUTHKEY" ]; then
-                            echo "[INFO] Authenticating Tailscale with provided authkey..."
-                            tailscale up --authkey="$AUTHKEY" --hostname="colab-llm-station"
+                            echo "[INFO] Authenticating Tailscale with provided authkey (SSH enabled)..."
+                            tailscale up --authkey="$AUTHKEY" --hostname="colab-llm-station" --ssh --accept-risk=all
                         else
-                            echo "[INFO] Complete authentication via URL/QR:"
-                            tailscale up --hostname="colab-llm-station" --qr
+                            echo "[INFO] Complete authentication via URL/QR (SSH enabled):"
+                            tailscale up --hostname="colab-llm-station" --qr --ssh --accept-risk=all
                         fi
                         ;;
                     status)
@@ -245,14 +255,87 @@ for m, v in d['engines']['ollama']['models'].items():
                         ;;
                 esac
                 ;;
+            vscode)
+                ACTION="${3:-status}"
+                PERSIST_DIR="/content/drive/MyDrive/.vscode_colab"
+                case "$ACTION" in
+                    setup)
+                        echo "[INFO] Checking VS Code CLI..."
+                        if ! command -v code > /dev/null 2>&1; then
+                            echo "[INFO] Downloading VS Code CLI..."
+                            curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' --output /tmp/vscode_cli.tar.gz
+                            tar -xf /tmp/vscode_cli.tar.gz -C /usr/local/bin
+                            chmod +x /usr/local/bin/code
+                            rm -f /tmp/vscode_cli.tar.gz
+                        fi
+                        mkdir -p "$PERSIST_DIR"
+                        mkdir -p /root/.vscode/cli
+                        if [ -f "$PERSIST_DIR/token.json" ]; then
+                            echo "[INFO] Restoring credentials from Google Drive ($PERSIST_DIR)..."
+                            cp -rn "$PERSIST_DIR"/* /root/.vscode/cli/ 2>/dev/null || true
+                        fi
+                        echo "[SUCCESS] VS Code CLI ready: $(code --version | head -n 1)"
+                        ;;
+                    login)
+                        mkdir -p "$PERSIST_DIR"
+                        mkdir -p /root/.vscode/cli
+                        cp -rn "$PERSIST_DIR"/* /root/.vscode/cli/ 2>/dev/null || true
+                        if code tunnel user show >/dev/null 2>&1; then
+                            echo "[INFO] Already authenticated to VS Code Tunnel via GitHub:"
+                            code tunnel user show
+                        else
+                            echo "[INFO] Authenticating VS Code Tunnel via GitHub..."
+                            code tunnel user login --provider github
+                            cp -f /root/.vscode/cli/token.json /root/.vscode/cli/code_tunnel.json "$PERSIST_DIR/" 2>/dev/null || true
+                            echo "[SUCCESS] Credentials saved to $PERSIST_DIR for persistence across sessions."
+                        fi
+                        ;;
+                    start)
+                        NAME="${4:-my-colab-gpu}"
+                        mkdir -p "$PERSIST_DIR"
+                        mkdir -p /root/.vscode/cli
+                        cp -rn "$PERSIST_DIR"/* /root/.vscode/cli/ 2>/dev/null || true
+                        if pgrep -f "code tunnel" > /dev/null; then
+                            echo "[WARN] VS Code Tunnel is already running."
+                        else
+                            echo "[INFO] Starting VS Code Remote Tunnel (Name: $NAME)..."
+                            nohup code tunnel --accept-server-license-terms --name "$NAME" > "$DIR/vscode_tunnel.log" 2>&1 &
+                            sleep 4
+                        fi
+                        echo "================================================================"
+                        echo "VS Code Remote Tunnel Status:"
+                        echo "  Machine Name: $NAME"
+                        echo "  Web URL:      https://vscode.dev/tunnel/$NAME"
+                        echo "  Log File:     $DIR/vscode_tunnel.log"
+                        echo "================================================================"
+                        ;;
+                    status)
+                        if pgrep -f "code tunnel" > /dev/null; then
+                            echo "[ACTIVE] VS Code Remote Tunnel is running."
+                            code tunnel status || true
+                        else
+                            echo "[INACTIVE] VS Code Remote Tunnel is not running."
+                        fi
+                        ;;
+                    stop)
+                        echo "[INFO] Stopping VS Code Tunnel..."
+                        pkill -f "code tunnel" || true
+                        echo "[SUCCESS] VS Code Tunnel stopped."
+                        ;;
+                    *)
+                        echo "Usage: ./llm.sh tunnel vscode [setup|login|start [name]|status|stop]"
+                        ;;
+                esac
+                ;;
             stop)
                 echo "[INFO] Terminating all tunnel services..."
                 pkill -f "cloudflared" || true
                 tailscale serve reset || true
+                pkill -f "code tunnel" || true
                 echo "[SUCCESS] All tunnels stopped."
                 ;;
             *)
-                echo "Usage: ./llm.sh tunnel [cloudflare|tailscale|stop]"
+                echo "Usage: ./llm.sh tunnel [cloudflare|tailscale|vscode|stop]"
                 ;;
         esac
         ;;
