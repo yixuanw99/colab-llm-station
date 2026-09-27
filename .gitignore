@@ -1,0 +1,13 @@
+# Logs
+*.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Large model blobs or caches
+models/
+blobs/
+*.bin
+*.safetensors
+*.gguf
