@@ -1,64 +1,64 @@
 {
-  "description": "Colab LLM Station - 多引擎與多硬體模型推薦清單",
+  "description": "Colab LLM Station - Model Configuration Catalogue",
   "engines": {
     "vllm": {
       "port": 8000,
-      "best_for": "A100 / H100 企業級高併發、高吞吐量生產環境",
-      "recommended_models": {
+      "recommended_hardware": "NVIDIA A100 / H100 (High throughput, PagedAttention)",
+      "models": {
         "Qwen/Qwen2.5-Coder-32B-Instruct": {
           "name": "Qwen 2.5 Coder 32B Instruct",
           "vram_gb": 64,
           "precision": "bfloat16",
-          "description": "SOTA 開源編程模型，滿血 BF16 載入 A100-80GB"
+          "description": "High-tier open-source coding model with full bfloat16 precision."
         },
         "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B": {
           "name": "DeepSeek R1 Distill Qwen 32B",
           "vram_gb": 64,
           "precision": "bfloat16",
-          "description": "最強推理思考鏈模型，解題與演算法邏輯頂級"
+          "description": "Reasoning model trained with reinforcement learning and chain-of-thought."
         },
         "Qwen/Qwen2.5-72B-Instruct-AWQ": {
           "name": "Qwen 2.5 72B Instruct (4-bit AWQ)",
           "vram_gb": 44,
           "precision": "AWQ",
-          "description": "72B 旗艦模型，vLLM 原生支援高吞吐量 AWQ 4-bit 量化"
+          "description": "Flagship 72B parameter model quantized with 4-bit AWQ."
         },
         "meta-llama/Llama-3.3-70B-Instruct": {
-          "name": "Llama 3.3 70B Instruct (AWQ/FP8)",
+          "name": "Llama 3.3 70B Instruct",
           "vram_gb": 44,
           "precision": "AWQ/FP8",
-          "description": "Meta 旗艦 70B，128k 上下文"
+          "description": "Meta 70B parameter open-weight model with 128k context support."
         }
       }
     },
     "ollama": {
       "port": 11434,
-      "best_for": "T4 / V100 / L4 輕量級顯卡或個人快速測試，節約顯存防 OOM",
-      "recommended_models": {
+      "recommended_hardware": "NVIDIA T4 / L4 / V100 (GGUF, low VRAM footprint)",
+      "models": {
         "qwen3.8:27b": {
           "name": "Qwen3.8-27B (GGUF)",
           "vram_gb": 17,
-          "description": "2026 最新代號，代碼與多模態頂級模型，原生 256K"
+          "description": "27B parameter dense architecture with native 256k context."
         },
         "deepseek-r1:32b": {
           "name": "DeepSeek-R1-Distill-32B",
           "vram_gb": 20,
-          "description": "具備自主思考鏈（CoT），專攻複雜邏輯與數學"
+          "description": "Distilled reasoning model optimized for mathematical logic and algorithms."
         },
         "deepseek-r1:70b": {
           "name": "DeepSeek-R1-Distill-70B (4-bit)",
           "vram_gb": 42,
-          "description": "70B 深度推理旗艦，輕量 GGUF 載入"
+          "description": "70B reasoning model in 4-bit quantized GGUF format."
         },
         "qwen2.5-coder:32b": {
           "name": "Qwen 2.5 Coder 32B",
           "vram_gb": 19,
-          "description": "相容各大 IDE 與外掛"
+          "description": "Coding model optimized for IDE integrations."
         },
         "qwen2.5-coder:7b": {
           "name": "Qwen 2.5 Coder 7B",
           "vram_gb": 6,
-          "description": "T4 (16GB) 顯卡推薦，小巧飛快"
+          "description": "Lightweight 7B model recommended for T4 (16GB) environments."
         }
       }
     }

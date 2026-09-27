@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-通用 LLM 終端多輪互動對話工具 (支援 vLLM 與 Ollama 標準 OpenAI-Compatible 協議)
+Interactive Multi-Turn CLI Chat for Colab LLM Station
+Supports both vLLM and Ollama via standard OpenAI-compatible completions.
 """
 import argparse
 import urllib.request
@@ -11,30 +12,30 @@ def chat_loop(engine: str, port: int, model: str):
     api_url = f"http://127.0.0.1:{port}/v1/chat/completions"
     
     print("=" * 70)
-    print(f"歡迎使用通用 LLM 終端工作站！")
-    print(f"當前引擎: [{engine.upper()}] | 端點: {api_url} | 模型: [{model}]")
-    print("操作提示: 輸入 'exit' 結束，輸入 'clear' 清空歷史對話")
+    print(f"Colab LLM Station - Interactive Shell")
+    print(f"Engine: [{engine.upper()}] | Endpoint: {api_url} | Model: [{model}]")
+    print("Commands: Type 'exit' to quit, 'clear' to reset conversation context")
     print("=" * 70)
 
     messages = [
-        {"role": "system", "content": "你是一位頂尖的 AI 助手與軟體工程師，請使用清晰有條理的繁體中文回答。"}
+        {"role": "system", "content": "You are an expert AI software engineer. Provide concise, clear, and accurate answers."}
     ]
     
     while True:
         try:
-            user_input = input("\n[您] > ").strip()
+            user_input = input("\n[User] > ").strip()
         except (KeyboardInterrupt, EOFError):
-            print("\n再見！")
+            print("\nExiting session.")
             break
 
         if not user_input:
             continue
         if user_input.lower() in ("exit", "quit"):
-            print("再見！")
+            print("Exiting session.")
             break
         if user_input.lower() == "clear":
-            messages = [{"role": "system", "content": "你是一位頂尖的 AI 助手與軟體工程師，請使用繁體中文回答。"}]
-            print("[系統] 對話歷史已清空。")
+            messages = [{"role": "system", "content": "You are an expert AI software engineer. Provide concise, clear, and accurate answers."}]
+            print("[System] Conversation context reset.")
             continue
 
         messages.append({"role": "user", "content": user_input})
@@ -79,14 +80,14 @@ def chat_loop(engine: str, port: int, model: str):
             print()
             messages.append({"role": "assistant", "content": assistant_reply})
         except Exception as e:
-            print(f"\n[錯誤] 請求失敗: {e}")
-            print(f"提示: 請確認 {engine} 服務是否已在 port {port} 啟動。")
+            print(f"\n[ERROR] Request failed: {e}")
+            print(f"Check if {engine} is listening on port {port}.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="通用 LLM 終端多輪對話")
-    parser.add_argument("--engine", type=str, default="ollama", choices=["ollama", "vllm"], help="推論引擎")
-    parser.add_argument("--port", type=int, default=11434, help="服務端口")
-    parser.add_argument("--model", type=str, default="qwen3.8:27b", help="模型名稱")
+    parser = argparse.ArgumentParser(description="Colab LLM Station Chat Interface")
+    parser.add_argument("--engine", type=str, default="ollama", choices=["ollama", "vllm"])
+    parser.add_argument("--port", type=int, default=11434)
+    parser.add_argument("--model", type=str, default="qwen3.8:27b")
     args = parser.parse_args()
 
     if args.port == 11434 and args.engine == "vllm":

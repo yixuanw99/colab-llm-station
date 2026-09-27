@@ -1,96 +1,91 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Colab LLM Station - 雙推論引擎 (vLLM / Ollama) 與雙通道 (Tailscale / Cloudflare)
+# Colab LLM Station - Unified CLI Manager
+# Dual Inference Engines (vLLM / Ollama) & Dual Networking (Tailscale / Cloudflare)
 # ==============================================================================
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 
-# ------------------------------------------------------------------------------
-# 輔助函式：硬體檢測與引擎推薦
-# ------------------------------------------------------------------------------
 function detect_hardware() {
     GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1 || echo "None")
     GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n 1 || echo "0")
     
-    echo "=== [硬體與推薦] ==="
-    echo "檢測到顯卡: $GPU_NAME (${GPU_MEM} MB VRAM)"
+    echo "=== Hardware Profile ==="
+    echo "Detected GPU: $GPU_NAME (${GPU_MEM} MB VRAM)"
     
     if [[ "$GPU_NAME" =~ "A100" ]] || [[ "$GPU_NAME" =~ "H100" ]] || [[ "$GPU_MEM" -gt 60000 ]]; then
-        echo "💡 評估: 具備 80GB 大顯存與高頻寬！強烈推薦使用 [vLLM] 享受業界生產級的高併發與 PagedAttention 吞吐量。"
+        echo "Recommendation: Enterprise GPU detected. Use [vLLM] for high-throughput serving and PagedAttention."
     elif [[ "$GPU_NAME" =~ "T4" ]] || [[ "$GPU_NAME" =~ "V100" ]] || [[ "$GPU_NAME" =~ "L4" ]] || [[ "$GPU_MEM" -lt 30000 ]]; then
-        echo "💡 評估: 顯存較有限（16GB~24GB）。建議使用 [Ollama] 載入量化版 (GGUF)，兼顧記憶體與穩定性。"
+        echo "Recommendation: Standard GPU detected. Use [Ollama] (GGUF format) to prevent Out-Of-Memory errors."
     else
-        echo "💡 評估: 可依據任務規模自由切換 vLLM 或 Ollama。"
+        echo "Recommendation: Select vLLM or Ollama depending on target workload."
     fi
 }
 
 function show_help() {
     echo "================================================================================"
-    echo " 🚀 Colab LLM Station - 雙推論引擎 (vLLM / Ollama) 與雙通道管理工具"
+    echo "Colab LLM Station - Multi-Engine & Tunnel Management Utility"
     echo "================================================================================"
-    echo "用法: ./llm.sh [子指令] [選項...]"
+    echo "Usage: ./llm.sh [command] [options...]"
     echo ""
-    echo "📌 總覽指令："
-    echo "  status                   查看 GPU、各引擎運行狀態與連線通道"
-    echo "  list                     檢視所有推薦模型清單 (vLLM / Ollama)"
-    echo "  sync                     自動提交代碼並同步至 GitHub"
+    echo "General Commands:"
+    echo "  status                   Display GPU metrics, active engines, and network tunnels"
+    echo "  list                     Show catalogue of recommended models for vLLM & Ollama"
+    echo "  sync                     Stage, commit, and push updates to remote Git repository"
     echo ""
-    echo "⚡ 企業級引擎 - vLLM (高併發、高吞吐、原生 Safetensors / AWQ，預設 Port 8000)："
-    echo "  vllm serve [model]       背景啟動 vLLM OpenAI API 伺服器 (預設: Qwen2.5-Coder-32B)"
-    echo "  vllm stop                停止 vLLM 服務"
-    echo "  vllm bench [model]       對 vLLM 進行高吞吐量基準評測"
-    echo "  vllm chat [model]        終端互動對話 (透過 vLLM 端點)"
+    echo "Engine: vLLM (Port 8000, high-concurrency, Safetensors / AWQ):"
+    echo "  vllm serve [model]       Launch background vLLM OpenAI-compatible server"
+    echo "  vllm stop                Terminate running vLLM server instance"
+    echo "  vllm bench [model]       Execute throughput and latency benchmark"
+    echo "  vllm chat [model]        Start interactive CLI session via vLLM endpoint"
     echo ""
-    echo "🦙 輕量級引擎 - Ollama (節約顯存、小卡防 OOM、GGUF，預設 Port 11434)："
-    echo "  ollama serve             背景啟動 Ollama 服務"
-    echo "  ollama pull <model>      下載 GGUF 模型 (如 qwen3.8:27b, deepseek-r1:32b)"
-    echo "  ollama chat [model]      終端多輪互動對話"
-    echo "  ollama bench [model]     對 Ollama 進行基準評測"
-    echo "  ollama list              列出本機已下載的 Ollama 模型"
+    echo "Engine: Ollama (Port 11434, lightweight GGUF format):"
+    echo "  ollama serve             Ensure background Ollama daemon is running"
+    echo "  ollama pull <model>      Download GGUF model from registry (e.g. qwen3.8:27b)"
+    echo "  ollama chat [model]      Start interactive multi-turn chat session"
+    echo "  ollama bench [model]     Run generation performance benchmark"
+    echo "  ollama list              List all locally cached Ollama models"
     echo ""
-    echo "🌐 連線通道管理 (雙通道)："
-    echo "  tunnel cloudflare [port] 啟動 Cloudflare HTTPS 公開穿透 (POC / 演示展示用，免註冊)"
-    echo "  tunnel tailscale [cmd]   管理 Tailscale 私有安全網 (真實部署用，零公網暴露)"
-    echo "                           子指令: up, status, down, serve"
+    echo "Network Tunnels:"
+    echo "  tunnel cloudflare [port] Create public HTTPS endpoint via Cloudflare Tunnel (POC)"
+    echo "  tunnel tailscale [cmd]   Manage private mesh network via Tailscale (Production)"
+    echo "                           Subcommands: up, status, down, serve [port]"
     echo "================================================================================"
 }
 
-# ------------------------------------------------------------------------------
-# 子命令處理
-# ------------------------------------------------------------------------------
 CMD="${1:-help}"
 
 case "$CMD" in
     status)
         detect_hardware
-        echo -e "\n=== [引擎運行狀態] ==="
+        echo -e "\n=== Engine Status ==="
         if curl -s http://127.0.0.1:8000/v1/models &> /dev/null; then
-            echo "• vLLM 服務: [🟢 運行中] (Port: 8000)"
+            echo "[RUNNING] vLLM Service (Port: 8000)"
         else
-            echo "• vLLM 服務: [⚪ 未運行] (可執行 ./llm.sh vllm serve 啟動)"
+            echo "[STOPPED] vLLM Service"
         fi
         
         if curl -s http://127.0.0.1:11434/api/version &> /dev/null; then
-            echo "• Ollama 服務: [🟢 運行中] (Port: 11434)"
+            echo "[RUNNING] Ollama Service (Port: 11434)"
         else
-            echo "• Ollama 服務: [⚪ 未運行] (可執行 ./llm.sh ollama serve 啟動)"
+            echo "[STOPPED] Ollama Service"
         fi
 
-        echo -e "\n=== [連線通道狀態] ==="
+        echo -e "\n=== Network Tunnel Status ==="
         CF_URL=$(grep -o 'https://[-a-zA-Z0-9.]*\.trycloudflare\.com' "$DIR/tunnel.log" 2>/dev/null | tail -n 1 || true)
         if [ -n "$CF_URL" ] && pgrep -f "cloudflared tunnel" > /dev/null; then
-            echo "• Cloudflare 公開穿透: [🟢 活躍] URL: $CF_URL"
+            echo "[ACTIVE]  Cloudflare Public Tunnel: $CF_URL"
         else
-            echo "• Cloudflare 公開穿透: [⚪ 未連線] (可執行 ./llm.sh tunnel cloudflare 啟動)"
+            echo "[INACTIVE] Cloudflare Public Tunnel"
         fi
 
         if tailscale status 2>/dev/null | grep -qv "Logged out"; then
-            echo "• Tailscale 私有網: [🟢 活躍] 節點已上線"
+            echo "[ACTIVE]  Tailscale Mesh Network"
             tailscale status | head -n 3
         else
-            echo "• Tailscale 私有網: [⚪ 未登入/未連線] (可執行 ./llm.sh tunnel tailscale up 啟動)"
+            echo "[INACTIVE] Tailscale Mesh Network (Run './llm.sh tunnel tailscale up')"
         fi
         ;;
 
@@ -99,11 +94,11 @@ case "$CMD" in
 import json
 with open('models.json') as f:
     d = json.load(f)
-print('=== 企業級引擎: vLLM 推薦模型 ===')
-for m, v in d['engines']['vllm']['recommended_models'].items():
+print('=== vLLM Models (Production / A100 / H100) ===')
+for m, v in d['engines']['vllm']['models'].items():
     print(f'• {m:<42} | ~{v[\"vram_gb\"]}GB | {v[\"description\"]}')
-print('\n=== 輕量級引擎: Ollama 推薦模型 ===')
-for m, v in d['engines']['ollama']['recommended_models'].items():
+print('\n=== Ollama Models (Lightweight / T4 / L4) ===')
+for m, v in d['engines']['ollama']['models'].items():
     print(f'• {m:<25} | ~{v[\"vram_gb\"]}GB | {v[\"description\"]}')
 "
         ;;
@@ -113,27 +108,28 @@ for m, v in d['engines']['ollama']['recommended_models'].items():
         case "$SUBCMD" in
             serve)
                 MODEL="${3:-Qwen/Qwen2.5-Coder-32B-Instruct}"
-                echo "正在背景啟動 vLLM 生產級服務 (模型: $MODEL, Port: 8000)..."
+                echo "[INFO] Starting vLLM server (Model: $MODEL, Port: 8000)..."
                 nohup python3 -m vllm.entrypoints.openai.api_server \
                     --model "$MODEL" \
                     --port 8000 \
                     --trust-remote-code \
                     --max-model-len 32768 \
                     --gpu-memory-utilization 0.90 > "$DIR/vllm.log" 2>&1 &
-                echo "vLLM 已在背景啟動，日誌記錄於 $DIR/vllm.log"
-                echo "等待伺服器就緒..."
+                echo "[INFO] Daemon started. Logs: $DIR/vllm.log"
+                echo "[INFO] Waiting for endpoint readiness..."
                 for i in {1..30}; do
                     if curl -s http://127.0.0.1:8000/v1/models &> /dev/null; then
-                        echo "vLLM 服務就緒！OpenAI 端點: http://127.0.0.1:8000/v1"
+                        echo "[SUCCESS] vLLM endpoint ready at http://127.0.0.1:8000/v1"
                         exit 0
                     fi
                     sleep 2
                 done
-                echo "提示: 模型較大，仍在加載權重中，可執行 tail -f $DIR/vllm.log 查看進度。"
+                echo "[WARN] Server is still loading weights. Monitor progress with 'tail -f $DIR/vllm.log'."
                 ;;
             stop)
-                echo "停止 vLLM 服務..."
+                echo "[INFO] Terminating vLLM process..."
                 pkill -f "vllm.entrypoints.openai.api_server" || true
+                echo "[SUCCESS] Process terminated."
                 ;;
             bench)
                 MODEL="${3:-Qwen/Qwen2.5-Coder-32B-Instruct}"
@@ -144,7 +140,7 @@ for m, v in d['engines']['ollama']['recommended_models'].items():
                 python3 "$DIR/chat.py" --engine vllm --port 8000 --model "$MODEL"
                 ;;
             *)
-                echo "用法: ./llm.sh vllm [serve|stop|bench|chat] [model]"
+                echo "Usage: ./llm.sh vllm [serve|stop|bench|chat] [model]"
                 ;;
         esac
         ;;
@@ -154,15 +150,15 @@ for m, v in d['engines']['ollama']['recommended_models'].items():
         case "$SUBCMD" in
             serve)
                 if ! curl -s http://127.0.0.1:11434/api/version &> /dev/null; then
-                    echo "正在背景啟動 Ollama 服務..."
+                    echo "[INFO] Starting Ollama daemon..."
                     OLLAMA_ORIGINS="*" OLLAMA_HOST="0.0.0.0:11434" nohup ollama serve > "$DIR/ollama.log" 2>&1 &
                     sleep 3
                 fi
-                echo "Ollama 服務運行中 (Port: 11434)"
+                echo "[SUCCESS] Ollama running at http://127.0.0.1:11434"
                 ;;
             pull)
                 MODEL="$3"
-                [ -z "$MODEL" ] && { echo "錯誤: 請指定模型名稱，例如: ./llm.sh ollama pull qwen3.8:27b"; exit 1; }
+                [ -z "$MODEL" ] && { echo "Error: Specify model identifier (e.g. ./llm.sh ollama pull qwen3.8:27b)"; exit 1; }
                 ollama pull "$MODEL"
                 ;;
             bench)
@@ -177,7 +173,7 @@ for m, v in d['engines']['ollama']['recommended_models'].items():
                 ollama list
                 ;;
             *)
-                echo "用法: ./llm.sh ollama [serve|pull|bench|chat|list] [model]"
+                echo "Usage: ./llm.sh ollama [serve|pull|bench|chat|list] [model]"
                 ;;
         esac
         ;;
@@ -190,21 +186,21 @@ for m, v in d['engines']['ollama']['recommended_models'].items():
                 if [ "$PORT" == "auto" ]; then
                     if curl -s http://127.0.0.1:8000/v1/models &> /dev/null; then
                         PORT=8000
-                        echo "自動檢測到 vLLM 正在運行，穿透端口映射為 8000"
+                        echo "[INFO] Detected active vLLM service; routing tunnel to port 8000."
                     else
                         PORT=11434
-                        echo "自動檢測到 Ollama 正在運行，穿透端口映射為 11434"
+                        echo "[INFO] Routing tunnel to Ollama service on port 11434."
                     fi
                 fi
-                echo "正在建立 Cloudflare HTTPS 公開穿透 (指向 127.0.0.1:$PORT)..."
+                echo "[INFO] Establishing Cloudflare Tunnel to 127.0.0.1:$PORT..."
                 pkill -f "cloudflared tunnel" || true
                 nohup cloudflared tunnel --url "http://127.0.0.1:$PORT" --logfile "$DIR/tunnel.log" > /dev/null 2>&1 &
                 sleep 6
                 CF_URL=$(grep -o 'https://[-a-zA-Z0-9.]*\.trycloudflare\.com' "$DIR/tunnel.log" | tail -n 1 || true)
                 echo "================================================================"
-                echo " 🌐 Cloudflare 公開 HTTPS 端點就緒 (POC / Demo 演示用)："
-                echo "   • Base URL:  $CF_URL/v1"
-                echo "   • 測試端點:   $CF_URL"
+                echo "Cloudflare Public Tunnel Established:"
+                echo "  Base URL: $CF_URL/v1"
+                echo "  Endpoint: $CF_URL"
                 echo "================================================================"
                 ;;
             tailscale)
@@ -212,10 +208,9 @@ for m, v in d['engines']['ollama']['recommended_models'].items():
                 case "$ACTION" in
                     up)
                         AUTHKEY="$4"
-                        mkdir -p /content/drive/MyDrive/colab/colab-llm-station/.tailscale
-                        # 確保背景常駐啟動
+                        mkdir -p "$DIR/.tailscale"
                         if ! pgrep -f "tailscaled" > /dev/null; then
-                            echo "啟動 tailscaled 背景服務 (Userspace Networking 模式)..."
+                            echo "[INFO] Starting tailscaled daemon (Userspace networking mode)..."
                             nohup tailscaled --tun=userspace-networking \
                                 --state="$DIR/.tailscale/tailscaled.state" \
                                 --socks5-server=localhost:1055 \
@@ -223,10 +218,10 @@ for m, v in d['engines']['ollama']['recommended_models'].items():
                             sleep 2
                         fi
                         if [ -n "$AUTHKEY" ]; then
-                            echo "使用 Authkey 登入 Tailscale..."
+                            echo "[INFO] Authenticating Tailscale with provided authkey..."
                             tailscale up --authkey="$AUTHKEY" --hostname="colab-llm-station"
                         else
-                            echo "互動式登入 Tailscale (請點擊終端輸出的驗證連結或掃描 QR)："
+                            echo "[INFO] Complete authentication via URL/QR:"
                             tailscale up --hostname="colab-llm-station" --qr
                         fi
                         ;;
@@ -238,16 +233,16 @@ for m, v in d['engines']['ollama']['recommended_models'].items():
                         ;;
                     serve)
                         PORT="${4:-8000}"
-                        echo "配置 Tailscale Serve (將本機 $PORT 映射給 Tailnet 私網成員)..."
+                        echo "[INFO] Exposing local port $PORT to private Tailnet..."
                         tailscale serve --bg "$PORT"
                         ;;
                     *)
-                        echo "用法: ./llm.sh tunnel tailscale [up|status|down|serve] [authkey/port]"
+                        echo "Usage: ./llm.sh tunnel tailscale [up|status|down|serve] [authkey/port]"
                         ;;
                 esac
                 ;;
             *)
-                echo "用法: ./llm.sh tunnel [cloudflare|tailscale]"
+                echo "Usage: ./llm.sh tunnel [cloudflare|tailscale]"
                 ;;
         esac
         ;;

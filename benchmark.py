@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-通用 LLM 效能評測工具 (支援 vLLM 與 Ollama 標準 OpenAI-Compatible 協議)
+Performance & Throughput Benchmark Suite for Colab LLM Station
+Supports both vLLM and Ollama via standard OpenAI-compatible completions.
 """
 import argparse
 import urllib.request
@@ -15,19 +16,18 @@ def get_gpu_vram():
             encoding="utf-8"
         ).strip().split(",")
         used, total, util = int(out[0].strip()), int(out[1].strip()), int(out[2].strip())
-        return f"{used} MiB / {total} MiB ({used / total * 100:.1f}%), 利用率: {util}%"
+        return f"{used} MiB / {total} MiB ({used / total * 100:.1f}%), Utilization: {util}%"
     except Exception as e:
-        return f"無法獲取 GPU 資訊 ({e})"
+        return f"GPU query error: {e}"
 
 def run_benchmark(engine: str, port: int, model: str, prompt: str):
-    base_url = f"http://127.0.0.1:{port}"
-    api_url = f"{base_url}/v1/chat/completions"
+    api_url = f"http://127.0.0.1:{port}/v1/chat/completions"
 
     print("=" * 70)
-    print(f"評測引擎: {engine.upper()} (端點: {api_url})")
-    print(f"評測模型: {model}")
-    print(f"初始 GPU 顯存: {get_gpu_vram()}")
-    print(f"測試問題: {prompt}")
+    print(f"Engine:    {engine.upper()} ({api_url})")
+    print(f"Model:     {model}")
+    print(f"Init VRAM: {get_gpu_vram()}")
+    print(f"Prompt:    {prompt}")
     print("=" * 70)
 
     payload = {
@@ -48,10 +48,9 @@ def run_benchmark(engine: str, port: int, model: str, prompt: str):
 
     t0 = time.time()
     first_token_time = None
-    output_tokens_approx = 0
     full_text = ""
     
-    print("\n[模型串流輸出開始]\n")
+    print("\n[Streaming Output Begin]\n")
     try:
         with urllib.request.urlopen(req) as resp:
             for raw_line in resp:
@@ -74,39 +73,36 @@ def run_benchmark(engine: str, port: int, model: str, prompt: str):
                 except json.JSONDecodeError:
                     pass
     except Exception as e:
-        print(f"\n[錯誤] 請求失敗: {e}")
-        print(f"提示: 請確認 {engine} 服務是否已在 port {port} 啟動。")
+        print(f"\n[ERROR] Request failed: {e}")
+        print(f"Check if {engine} is listening on port {port}.")
         return
 
     t1 = time.time()
-    print("\n\n[模型串流輸出結束]\n")
+    print("\n\n[Streaming Output End]\n")
 
-    # 估算 token 數 (中文約 1.5 chars/token, 英文約 4 chars/token)
     total_time = t1 - t0
     gen_time = (t1 - first_token_time) if first_token_time else total_time
     output_chars = len(full_text)
-    # 若無準確 usage，以字符統計做參考
     approx_tokens = int(output_chars * 0.75) if any(ord(c) > 127 for c in full_text) else int(output_chars / 4)
 
     print("=" * 70)
-    print("效能基準報告：")
-    print(f"• 首字延遲 (TTFT): {first_token_time - t0:.2f} 秒" if first_token_time else "• 首字延遲: N/A")
-    print(f"• 總生成時間: {total_time:.2f} 秒 (生成階段: {gen_time:.2f} 秒)")
-    print(f"• 產出字數: {output_chars} 字元 (約 ~{approx_tokens} tokens)")
+    print("Benchmark Metrics:")
+    print(f"  Time To First Token (TTFT): {first_token_time - t0:.2f} s" if first_token_time else "  TTFT: N/A")
+    print(f"  Total Duration:             {total_time:.2f} s (Generation phase: {gen_time:.2f} s)")
+    print(f"  Output Volume:              {output_chars} characters (~{approx_tokens} tokens)")
     if gen_time > 0 and approx_tokens > 0:
-        print(f"• 估計生成速度: ~{approx_tokens / gen_time:.2f} tokens/s")
-    print(f"• 運行後 GPU 顯存: {get_gpu_vram()}")
+        print(f"  Estimated Throughput:       ~{approx_tokens / gen_time:.2f} tokens/s")
+    print(f"  Post-Inference VRAM:        {get_gpu_vram()}")
     print("=" * 70)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="通用 LLM 評測工具")
-    parser.add_argument("--engine", type=str, default="ollama", choices=["ollama", "vllm"], help="推論引擎")
-    parser.add_argument("--port", type=int, default=11434, help="服務端口 (Ollama 預設 11434, vLLM 預設 8000)")
-    parser.add_argument("--model", type=str, default="qwen3.8:27b", help="模型標籤或 Hugging Face ID")
-    parser.add_argument("--prompt", type=str, default="請實作一個執行緒安全的任務排程器（Task Scheduler），支援優先級佇列與定時觸發。", help="測試問題")
+    parser = argparse.ArgumentParser(description="Colab LLM Station Benchmark")
+    parser.add_argument("--engine", type=str, default="ollama", choices=["ollama", "vllm"])
+    parser.add_argument("--port", type=int, default=11434)
+    parser.add_argument("--model", type=str, default="qwen3.8:27b")
+    parser.add_argument("--prompt", type=str, default="Implement a thread-safe task scheduler with priority queue and timeout support in Python.")
     args = parser.parse_args()
 
-    # 自動校正預設 port
     if args.port == 11434 and args.engine == "vllm":
         args.port = 8000
 
