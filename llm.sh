@@ -37,7 +37,7 @@ CMD="${1:-help}"
 case "$CMD" in
     status)
         echo "=== [GPU 狀態] ==="
-        nvidia-smi --query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu --format=table
+        nvidia-smi --query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu --format=csv
         echo -e "\n=== [已下載的模型] ==="
         ollama list
         ;;
