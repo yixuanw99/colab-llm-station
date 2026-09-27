@@ -63,20 +63,35 @@ Colab LLM Station 旨在解決雲端暫態 GPU 環境中的兩大工程挑戰：
 
 ## 快速啟動 (Colab 筆記本執行流程)
 
-本專案已內建完整的 Colab 範例筆記本 **[`colab_station.ipynb`](colab_station.ipynb)**，你可以直接在 Google Colab 中開啟並執行。
+本專案提供立即可用的 Jupyter 範例筆記本：**[`colab_station.ipynb`](colab_station.ipynb)**（英文版）與 **[`colab_station-zh.ipynb`](colab_station-zh.ipynb)**（繁體中文版），你可以直接在 Google Colab 中開啟並執行。
 
-### 步驟 0：準備 Tailscale Auth Key（僅需設定一次）
-1. 前往 [Tailscale Admin Console - Keys](https://login.tailscale.com/admin/settings/keys) 點擊 **Generate auth key**。
-2. 勾選 **Reusable**（可重複使用）與 **Ephemeral**（重要！機器離線自動註銷，避免名稱衝突）。
-3. 打開 Google Colab 筆記本，點擊左側工具列的 **鑰匙圖示（Secrets / 密鑰）** 🔑：
-   * **名稱**：`TAILSCALE_AUTHKEY`
-   * **值**：貼上你的 `tskey-auth-...`
-   * 開啟 **「筆記本存取權限 (Notebook access)」**。
+### 步驟 0：前置作業與 Tailscale Auth Key 設定（僅需設定一次）
+
+Google Colab 執行個體位於內部 NAT 網路後方，未配置獨立公網 IPv4 位址。使用具備暫態屬性（Ephemeral）的 Tailscale Auth Key，可在虛擬機器啟動時自動完成身分認證並建立網路節點，無需在執行過程中透過瀏覽器手動登入或掃描 QR Code。
+
+#### 1. 於 Tailscale Admin Console 產生金鑰
+1. 開啟 [Tailscale Admin Console - Settings - Keys](https://login.tailscale.com/admin/settings/keys)。
+2. 點擊 **Generate auth key**。
+3. 設定金鑰各項參數：
+   * **Description**: 輸入識別名稱（例如 `colab-llm-station`）。
+   * **Reusable**: **開啟 (Enabled)**。允許同一金鑰在 Colab Runtime 重啟後重複使用。
+   * **Ephemeral**: **開啟 (Enabled，重要)**。當 Colab 執行個體中斷連線或關閉時，系統會自動自 Tailnet 裝置清單中移除該節點，避免累積無效離線主機。
+   * **Pre-authorized**: **開啟 (Enabled)**。設備連線後自動核准加入網路，無需至後台手動審批。
+   * **Tags**（選用）: 若組織 Tailnet ACL 規範需要標籤，可指定標籤（如 `tag:server`）。
+4. 點擊 **Generate key** 並複製產生的金鑰字串（格式為 `tskey-auth-...`）。請妥善保存，Tailscale 僅會顯示此金鑰一次。
+
+#### 2. 於 Google Colab Secrets 儲存金鑰
+1. 在 Google Colab 左側工具列點擊 **Secrets** 面板（鑰匙圖示）。
+2. 點擊 **Add new secret**（新增密鑰）。
+3. 填入設定數值：
+   * **名稱 (Name)**：`TAILSCALE_AUTHKEY`（大小寫需完全一致）。
+   * **值 (Value)**：貼上剛才複製的 `tskey-auth-...` 金鑰字串。
+4. 將 **Notebook access**（筆記本存取權限）開關切換為 **開啟 (ON)**，以允許 Python 透過 `google.colab.userdata` 讀取金鑰。
 
 ---
 
-### 步驟 1：在 Colab 執行「獨立 SSH 啟動儲存格」
-在 Colab 執行以下儲存格（或直接開啟 [`colab_station.ipynb`](colab_station.ipynb) 執行步驟 1）：
+### 步驟 1：在 Colab 執行「獨立連線儲存格」建立 SSH
+在 Colab 執行以下儲存格（或直接開啟 [`colab_station.ipynb`](colab_station.ipynb) / [`colab_station-zh.ipynb`](colab_station-zh.ipynb) 執行步驟 1）：
 
 ```python
 # ==============================================================================
@@ -90,13 +105,12 @@ drive.mount('/content/drive')
 # 2. 取得剛剛存好的 Tailscale Auth Key
 authkey = userdata.get('TAILSCALE_AUTHKEY')
 
-# 3. 啟動 Tailscale 並啟用內建 SSH 伺服器
+# 3. 啟動 Tailscale 並啟用內建 SSH 伺服器（秒級純連線，不佔用時間進行套件安裝）
 !cd /content/drive/MyDrive/colab/colab-llm-station && \
- bash setup.sh && \
  bash llm.sh tunnel tailscale up "$authkey"
 
 print("\n" + "="*60)
-print("✓ Tailscale SSH 已就緒！")
+print("[OK] Tailscale SSH 連線已就緒。")
 print("1. 本機終端機連線指令：")
 print("   ssh root@colab-llm-station")
 print("\n2. 本機 VS Code (Remote - SSH) 連線：")
@@ -123,12 +137,20 @@ ssh root@colab-llm-station
 
 ---
 
-### 步驟 3：啟動 LLM 推論服務
-連入 SSH 終端機後（或在 Colab 筆記本的下一個儲存格），執行推論服務：
+### 步驟 3：初始化環境與啟動 LLM 推論服務
+SSH 連線就緒後，你可以在本機終端機（SSH 或 VS Code 內建終端機）直接執行環境初始化與推論啟動，亦可在 Colab 筆記本的後續儲存格執行：
 
 ```bash
 cd /content/drive/MyDrive/colab/colab-llm-station
 
+# 1. 初始化環境依賴（每個新 Runtime 僅需執行一次）
+bash setup.sh
+
+# 亦可依需求單獨安裝特定推論引擎：
+# bash setup.sh vllm    # 僅安裝 vLLM 與系統依賴
+# bash setup.sh ollama  # 僅安裝 Ollama 與系統依賴
+
+# 2. 啟動推論引擎：
 # 企業級 GPU (A100 / H100): 啟動 vLLM (Port 8000)
 bash llm.sh tunnel tailscale serve 8000
 bash llm.sh vllm serve Qwen/Qwen2.5-Coder-32B-Instruct

@@ -9,8 +9,14 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 
 function detect_hardware() {
-    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1 || echo "None")
-    GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n 1 || echo "0")
+    if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
+        GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -n 1)
+        GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -n 1 | tr -dc '0-9')
+        GPU_MEM="${GPU_MEM:-0}"
+    else
+        GPU_NAME="None"
+        GPU_MEM="0"
+    fi
     
     echo "=== Hardware Profile ==="
     echo "Detected GPU: $GPU_NAME (${GPU_MEM} MB VRAM)"
@@ -222,6 +228,10 @@ for m, v in d['engines']['ollama']['models'].items():
                     up)
                         AUTHKEY="$4"
                         mkdir -p "$DIR/.tailscale"
+                        if ! command -v tailscale > /dev/null 2>&1 || ! command -v tailscaled > /dev/null 2>&1; then
+                            echo "[INFO] Tailscale not detected. Installing Tailscale..."
+                            curl -fsSL https://tailscale.com/install.sh | sh
+                        fi
                         if ! pgrep -f "tailscaled" > /dev/null; then
                             echo "[INFO] Starting tailscaled daemon (Userspace networking mode)..."
                             nohup tailscaled --tun=userspace-networking \

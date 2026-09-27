@@ -63,15 +63,30 @@ All runtime components are locked to verified versions via `versions.env` and `r
 
 ## Quickstart (Colab Notebook Execution Flow)
 
-This repository includes a ready-to-run Jupyter notebook: **[`colab_station.ipynb`](colab_station.ipynb)**. You can open and run it directly in Google Colab.
+This repository provides ready-to-run Jupyter notebooks: **[`colab_station.ipynb`](colab_station.ipynb)** (English) and **[`colab_station-zh.ipynb`](colab_station-zh.ipynb)** (繁體中文). You can open and run them directly in Google Colab.
 
-### Step 0: Prepare Tailscale Auth Key (One-Time Setup)
-1. Go to [Tailscale Admin Console - Keys](https://login.tailscale.com/admin/settings/keys) and click **Generate auth key**.
-2. Check **Reusable** (for reboot persistence) and **Ephemeral** (auto-removes offline instances to prevent hostname collisions).
-3. In your Colab notebook, click the **Key icon (Secrets)** 🔑 on the left sidebar:
-   * **Name**: `TAILSCALE_AUTHKEY`
-   * **Value**: Paste your `tskey-auth-...`
-   * Toggle ON **"Notebook access"**.
+### Step 0: Prerequisites & Tailscale Auth Key Setup (One-Time Configuration)
+
+Google Colab runtimes reside behind internal network address translation (NAT) without dedicated public IPv4 addresses. An ephemeral Tailscale Auth Key enables headless, automated authentication during runtime boot without manual browser logins or QR codes.
+
+#### 1. Generate Auth Key in Tailscale Admin Console
+1. Navigate to the [Tailscale Admin Console - Settings - Keys](https://login.tailscale.com/admin/settings/keys).
+2. Click **Generate auth key**.
+3. Configure the key parameters:
+   * **Description**: Enter an identifier, e.g., `colab-llm-station`.
+   * **Reusable**: **Enabled**. Permits key reuse across multiple Colab runtime restarts.
+   * **Ephemeral**: **Enabled (Crucial)**. Automatically deregisters offline nodes when Colab disconnects, preventing accumulation of zombie hosts in your Tailnet.
+   * **Pre-authorized**: **Enabled**. Automatically approves the device into your network without manual admin approval.
+   * **Tags** (Optional): Assign tags if mandated by your Tailnet ACL policy (e.g., `tag:server`).
+4. Click **Generate key** and copy the generated `tskey-auth-...` string. Tailscale displays this key only once.
+
+#### 2. Configure Google Colab Secrets
+1. In Google Colab, open the left navigation panel and select the **Secrets** panel (padlock/key icon).
+2. Click **Add new secret**.
+3. Enter the required fields:
+   * **Name**: `TAILSCALE_AUTHKEY` (case-sensitive).
+   * **Value**: Paste your `tskey-auth-...` key string.
+4. Toggle the **Notebook access** switch to **ON** to permit runtime access via `google.colab.userdata`.
 
 ---
 
@@ -90,13 +105,12 @@ drive.mount('/content/drive')
 # 2. Retrieve Tailscale Auth Key from Secrets
 authkey = userdata.get('TAILSCALE_AUTHKEY')
 
-# 3. Connect to Tailscale with Native SSH Server
+# 3. Connect to Tailscale with Native SSH Server (Instant connection, zero setup overhead)
 !cd /content/drive/MyDrive/colab/colab-llm-station && \
- bash setup.sh && \
  bash llm.sh tunnel tailscale up "$authkey"
 
 print("\n" + "="*60)
-print("✓ Tailscale SSH is Ready!")
+print("[OK] Tailscale SSH service is ready.")
 print("1. Local Terminal Connection:")
 print("   ssh root@colab-llm-station")
 print("\n2. Local VS Code (Remote - SSH) Connection:")
@@ -123,12 +137,20 @@ ssh root@colab-llm-station
 
 ---
 
-### Step 3: Serve LLM Inference
-From your SSH session (or in the next Colab notebook cell), launch your preferred engine:
+### Step 3: Initialize Environment & Serve Inference
+Now that your SSH connection is active, provision the environment and launch inference either directly from your local SSH / VS Code terminal or in the subsequent Colab notebook cells:
 
 ```bash
 cd /content/drive/MyDrive/colab/colab-llm-station
 
+# 1. Provision environment dependencies (Run once per runtime session)
+bash setup.sh
+
+# Or provision only a specific engine:
+# bash setup.sh vllm    # Only vLLM and system dependencies
+# bash setup.sh ollama  # Only Ollama
+
+# 2. Serve LLM Inference:
 # Enterprise Tier (A100 / H100): Launch vLLM (Port 8000)
 bash llm.sh tunnel tailscale serve 8000
 bash llm.sh vllm serve Qwen/Qwen2.5-Coder-32B-Instruct

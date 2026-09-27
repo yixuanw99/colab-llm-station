@@ -102,9 +102,7 @@ if [[ "$MODE" == "all" ]] || [[ "$MODE" == "vllm" ]]; then
     fi
 
     # Remove conflicting torchaudio ABI package if present
-    if python3 -c "import torchaudio" 2>/dev/null; then
-        pip uninstall -y -q torchaudio || true
-    fi
+    pip uninstall -y -q torchaudio > /dev/null 2>&1 || true
 fi
 
 # 5. Permissions
