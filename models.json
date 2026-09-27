@@ -1,0 +1,35 @@
+{
+  "description": "Colab A100-80GB 推薦模型配置清單",
+  "recommended_models": {
+    "qwen3.8:27b": {
+      "name": "Qwen3.8-27B",
+      "category": "coding_and_agent",
+      "vram_required_gb": 36,
+      "description": "2026 最新代號，代碼與多模態頂級模型，具備 256K 上下文"
+    },
+    "deepseek-r1:32b": {
+      "name": "DeepSeek-R1-Distill-Qwen-32B",
+      "category": "reasoning_and_math",
+      "vram_required_gb": 40,
+      "description": "具備自主思考鏈（CoT），專攻複雜邏輯、數學與演算法"
+    },
+    "deepseek-r1:70b": {
+      "name": "DeepSeek-R1-Distill-Llama-70B",
+      "category": "reasoning_heavy",
+      "vram_required_gb": 44,
+      "description": "70B 深度推理旗艦，4-bit 量化無損部署"
+    },
+    "llama3.3:70b": {
+      "name": "Llama 3.3 70B Instruct",
+      "category": "general_heavy",
+      "vram_required_gb": 42,
+      "description": "Meta 旗艦開源通用模型，128k 上下文窗口"
+    },
+    "qwen2.5-coder:32b": {
+      "name": "Qwen 2.5 Coder 32B",
+      "category": "coding",
+      "vram_required_gb": 38,
+      "description": "經典代碼模型，廣泛相容各大代碼外掛與 IDE"
+    }
+  }
+}
